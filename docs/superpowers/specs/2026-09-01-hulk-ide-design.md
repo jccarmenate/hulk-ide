@@ -32,14 +32,21 @@ reimplementing language analysis.
 3. Autocompletion: variables/parameters in scope, and members after `.` on a
    typed receiver.
 4. Hover (type/signature of the identifier under the cursor) and go-to-definition.
+5. Run a `.hulk` file from the editor (compile + execute, output shown in a
+   terminal).
+6. Lexer and parser error recovery: report multiple lexical/syntactic errors
+   per pass instead of stopping at the first one, at least at top-level
+   declaration granularity (see "Lexer/parser error recovery" below).
 
 ## Non-goals (v1)
 
-- Running or debugging HULK programs from the editor (no LLVM/codegen
-  dependency in the LSP).
-- Parser error recovery / multi-error reporting from the lexer and parser
-  (see "Known limitations" below — v1 accepts single-error-per-phase for
-  those two stages).
+- Step-through debugging (breakpoints, DAP integration) — "run" (goal 5)
+  means compile-and-execute-with-output only.
+- Fine-grained (sub-declaration / inside-a-block) parser error recovery —
+  goal 6 recovers at top-level declaration boundaries; recovering inside a
+  single function/block body is a documented future improvement (HULK is
+  expression-based with no statement boundaries, which makes intra-block
+  recovery considerably harder — not worth the risk for v1).
 - Anything beyond VS Code (no web playground, no standalone desktop app).
 
 ## Repository layout
@@ -63,9 +70,13 @@ hulk-ide/
     vscode/                                          # new: extension (TypeScript)
 ```
 
-`hulk-codegen`, `hulk-rt`, and `hulk-cli` are kept in the workspace
-unchanged (for potential future use — e.g. a "run" feature — but out of
-scope now) and are not depended on by `hulk-lsp`.
+`hulk-codegen` and `hulk-rt` are kept unchanged and are still not depended
+on by `hulk-lsp` — the "run" feature (goal 5) is implemented entirely in
+the VS Code extension, which shells out to the existing `hulk-cli` binary
+rather than the LSP driving codegen itself (see "Running code from the
+editor" below). `hulk-lexer` and `hulk-parser` gain new additive entry
+points (see "Lexer/parser error recovery" below); `hulk-cli`'s own
+behavior is unchanged.
 
 ## `hulk-lsp` crate
 
@@ -98,13 +109,22 @@ For each open document the server keeps:
 Runs synchronously in memory against the buffer text (never touches disk,
 never shells out to `hulk-cli`):
 
-1. `hulk_lexer::Lexer::new(text).tokenize()`. On `Err(LexError)` → publish
-   one diagnostic (severity Error) at its span, clear this document's
-   diagnostics from later phases, stop. Do **not** touch the last-good tree.
-2. On success: `hulk_transpile::expand_program` (macro expansion) then
-   `hulk_parser::parse`. On `Err` from either → publish one diagnostic,
-   stop, last-good tree untouched.
-3. On success: `hulk_semantic::analyze(&program)`.
+1. `hulk_lexer::Lexer::new(text).tokenize_recovering()` (new recovering
+   entry point, see "Lexer/parser error recovery" below) → best-effort
+   token stream plus `Vec<LexError>`. Publish all lex errors as
+   diagnostics. If there are any, stop here for this revision (parsing a
+   token stream with recovery gaps is not attempted in v1) — last-good tree
+   untouched.
+2. On success (no lex errors): `hulk_transpile::expand_program` (macro
+   expansion) then the new recovering parse entry point (see below) →
+   best-effort `Program` plus `Vec<ParseError>`, recovered at top-level
+   declaration boundaries. Publish all parse errors as diagnostics. If any
+   top-level declaration failed to parse, semantic analysis still runs
+   against the declarations that *did* parse successfully (partial
+   program), so the rest of the file keeps getting semantic diagnostics
+   and last-good-tree updates even while one declaration has a syntax
+   error.
+3. `hulk_semantic::analyze(&program)` on whatever declarations parsed.
    - `Err(Vec<SemanticError>)` → publish **all** of them as diagnostics.
      Last-good tree untouched (still reflects the previous valid state).
    - `Ok(VerifiedProgram)` → publish `verified.warnings` as diagnostics
@@ -116,6 +136,64 @@ single-character LSP `Range` at that point (`{line, col}` →
 `{line, col}..{line, col+1}`, converting from HULK's 1-based line/col to
 LSP's 0-based). Widening this to cover a full token/node is a possible
 future improvement, not required for v1.
+
+### Lexer/parser error recovery
+
+Both crates get a new, additive "recovering" entry point; the existing
+single-error entry points used by `hulk-cli` are left in place and
+unchanged (its stderr output and exit-code contract do not change).
+
+- **Lexer** (`crates/hulk-lexer`): the internal scan loop already
+  identifies the same failure cases (`unexpected char`, `unterminated
+  string`, `invalid escape`) that `tokenize()` returns on. Refactor that
+  loop into a shared internal function that, instead of returning on the
+  first failure, records a `LexError`, skips the offending character(s)
+  (or advances to end-of-line for an unterminated string) and keeps
+  scanning. `tokenize()` becomes a thin wrapper: run the shared loop, and
+  if its error vec is non-empty return `Err(errors[0])` (bit-for-bit the
+  old behavior) else `Ok(tokens)`. The new `tokenize_recovering(&mut self)
+  -> (Vec<Token>, Vec<LexError>)` exposes the full result. `hulk-cli` keeps
+  calling `tokenize()`; `hulk-lsp` calls `tokenize_recovering()`.
+- **Parser** (`crates/hulk-parser`): recovery granularity is one top-level
+  declaration (`function`, `type`, `protocol`, or the trailing global
+  expression — see `GRAMMAR_LL1.md` for the top-level production). Add
+  `parse_recovering(tokens: Vec<Token>) -> (Program, Vec<ParseError>)`: it
+  parses top-level items in a loop; when parsing one item fails, it records
+  the `ParseError`, then skips tokens until it finds one that starts a new
+  top-level item (`function`, `type`, `protocol` keyword) or reaches EOF,
+  and resumes the loop from there. The existing `parse()` /
+  `parse_program()` (single error, stops immediately) are unchanged and
+  keep serving `hulk-cli`.
+- Because `hulk_transpile::expand_program` runs on the `Program` produced
+  by parsing, it operates on whatever top-level declarations survived
+  recovery — a macro inside a declaration that failed to parse is simply
+  absent from that `Program`, which is correct (nothing to expand there).
+
+### Running code from the editor
+
+A VS Code command (`hulk.runFile`, bound to an editor title button and the
+command palette) that does not involve `hulk-lsp` or the JSON-RPC
+connection at all:
+
+1. Save the active document if dirty.
+2. Reuse (or create) a dedicated VS Code integrated terminal named "HULK".
+3. Send it a shell command that runs the already-built `hulk-cli` binary
+   against the file's path, and on success runs the produced `./output`
+   binary — e.g. `hulk-cli path/to/file.hulk && ./output` (exact
+   invocation/working-directory handling to be finalized in the
+   implementation plan, including the Windows executable extension).
+   `hulk-cli` already writes compiler errors to stderr in the
+   `(line,col) TYPE: message` format and sets a non-zero exit code on
+   failure, so `&&` naturally skips execution when compilation fails and
+   the user sees the compiler's own error output in the terminal.
+
+**Prerequisite / risk**: `hulk-cli`'s codegen path links a native
+executable via `cc` and needs LLVM 17 (`inkwell`'s `llvm17-0` feature) and
+a C linker available on the machine. The original project's dev/CI
+environment was not confirmed to be Windows. Verifying that `cargo build
+-p hulk-cli` succeeds on this Windows machine (and what toolchain it needs
+— e.g. MSVC, MinGW, or WSL) is the first task of the implementation plan
+for goal 5, before any extension-side "run" code is written.
 
 ### Hover / go-to-definition / completion
 
@@ -165,7 +243,9 @@ Standard TypeScript npm project:
   number literals, comments, operators. Purely static, no server involved.
 - `language-configuration.json` — bracket pairs, comment tokens, auto-closing.
 - `src/extension.ts` — activates `vscode-languageclient`, spawns the
-  `hulk-lsp` binary over stdio, wires it to `.hulk` documents.
+  `hulk-lsp` binary over stdio, wires it to `.hulk` documents; also
+  registers the `hulk.runFile` command described in "Running code from the
+  editor" above.
 
 The extension ships the `hulk-lsp` binary path via configuration during
 development (points at `target/debug/hulk-lsp` or a workspace setting);
@@ -174,27 +254,40 @@ v1 — this is a personal-use extension run from source.
 
 ## Known limitations (v1, by design)
 
-- Only one lexical or syntactic error is ever shown at a time (matches the
-  underlying compiler's current error model) — if there's a syntax error,
-  semantic diagnostics for the rest of the file aren't recomputed until it's
-  fixed, though hover/completion still work off the last-good tree.
+- Parser recovery is at top-level-declaration granularity only: multiple
+  syntax errors within the *same* function/type body still surface as one
+  error for that declaration (the rest of the declaration's body is
+  skipped until the next top-level item). Other declarations in the file
+  are unaffected.
 - No formatting, no rename-symbol, no find-all-references, no code actions.
-- No execution/debugging.
+- No step-through debugging — "run" is compile-and-execute only, output
+  goes to a terminal, not an inline debugger.
 
 ## Testing
 
+- `hulk-lexer` / `hulk-parser`: unit tests for the new recovering entry
+  points — a source with two separate lexical errors both get reported by
+  `tokenize_recovering`; a source with a broken `function` followed by a
+  valid `type` gets one `ParseError` plus a `Program` that still contains
+  the valid `type` declaration. Existing tests for `tokenize()`/`parse()`
+  must keep passing unchanged (proves the single-error entry points are
+  untouched).
 - `hulk-lsp`: Rust integration tests that feed HULK source snippets
   directly into the pipeline functions used by the diagnostics handler
-  (`tokenize` → `expand_program` → `parse` → `analyze`) and assert the
-  resulting diagnostic list (message, severity, position) — no actual LSP
-  transport/JSON-RPC involved, these test the analysis-to-diagnostics
-  mapping logic directly. Separately, a handful of tests drive the
-  position-index/scope-helper functions used by hover/completion/goto-def
-  against known snippets and assert the expected span/type is found.
+  (`tokenize_recovering` → `expand_program` → `parse_recovering` →
+  `analyze`) and assert the resulting diagnostic list (message, severity,
+  position) — no actual LSP transport/JSON-RPC involved, these test the
+  analysis-to-diagnostics mapping logic directly. Separately, a handful of
+  tests drive the position-index/scope-helper functions used by
+  hover/completion/goto-def against known snippets and assert the expected
+  span/type is found.
 - Extension: manual smoke test (open a `.hulk` file, confirm highlighting,
   introduce an error, confirm the squiggle appears and disappears on fix,
-  check hover and completion on a small sample file). Not worth automating
-  VS Code UI for a personal project.
+  check hover and completion on a small sample file, run a working file via
+  `hulk.runFile` and confirm its output appears in the terminal, run a file
+  with a compile error and confirm the compiler error appears instead of a
+  stale/no binary being executed). Not worth automating VS Code UI for a
+  personal project.
 
 ## Open items deferred to the implementation plan
 
@@ -203,3 +296,12 @@ v1 — this is a personal-use extension run from source.
 - Exact shape of the position-index data structure.
 - Whether the scope-helper extraction from `hulk-semantic`'s inference pass
   is a new public function or an internal one re-exported for `hulk-lsp`.
+- Verifying the local Windows toolchain can actually build `hulk-cli`
+  (LLVM 17 + C linker) — first task for the "run" feature; may require
+  installing LLVM/MinGW or documenting a WSL-based workaround.
+- The exact set of "top-level item start" tokens the parser's recovery
+  resynchronizes on, and how it handles a syntax error inside the trailing
+  global expression (which has no following top-level keyword to
+  resynchronize to — likely just skips to EOF for that case).
+- Exact terminal invocation for `hulk.runFile` (working directory, how the
+  extension locates the `hulk-cli`/`output` paths, Windows `.exe` handling).
