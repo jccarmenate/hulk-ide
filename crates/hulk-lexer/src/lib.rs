@@ -278,14 +278,34 @@ impl Lexer {
 
     /// Tokenizes the entire source string into a flat list of tokens.
     ///
-    /// Skips whitespace and comments. Returns [`LexError`] on the first
-    /// unrecognised character or unterminated string literal.
+    /// Stops at the first error, matching the compiler's CLI contract. See
+    /// [`Lexer::tokenize_recovering`] to collect every error in one pass.
     ///
     /// # Errors
     /// - [`LexError::UnexpectedChar`] — character belongs to no HULK token.
     /// - [`LexError::UnterminatedString`] — string literal never closed.
+    /// - [`LexError::InvalidEscape`] — unrecognised escape sequence in a string.
     pub fn tokenize(&mut self) -> Result<Vec<Token>, LexError> {
+        let (tokens, mut errors) = self.tokenize_recovering();
+        if errors.is_empty() {
+            Ok(tokens)
+        } else {
+            Err(errors.remove(0))
+        }
+    }
+
+    /// Tokenizes the entire source string, continuing past errors instead of
+    /// stopping at the first one.
+    ///
+    /// Returns every token that could be produced (best effort — a string
+    /// literal with an invalid escape still yields a `StringLit` token, with
+    /// the bad escape skipped) alongside every [`LexError`] encountered, in
+    /// source order. `tokenize()` is a thin wrapper around this that
+    /// preserves the original stop-at-first-error contract.
+    pub fn tokenize_recovering(&mut self) -> (Vec<Token>, Vec<LexError>) {
         let mut tokens = Vec::new();
+        let mut errors = Vec::new();
+
         while !self.is_at_end() {
             let span: Span = self.current_span();
             let ch: char = self.advance();
@@ -387,7 +407,7 @@ impl Lexer {
                 '$' => TokenKind::Dollar,
 
                 // ── String literals ───────────────────────────────────────
-                '"' => self.lex_string(span)?,
+                '"' => self.lex_string(span, &mut errors),
 
                 // ── Numbers ───────────────────────────────────────────────
                 '0'..='9' => self.lex_number(ch),
@@ -397,8 +417,11 @@ impl Lexer {
                 '_' => TokenKind::Underscore,
 
                 // ── Unknown character ─────────────────────────────────────
+                // WHY: record and skip rather than abort, so scanning can
+                // continue and find later errors in the same pass.
                 _ => {
-                    return Err(LexError::UnexpectedChar { ch, span });
+                    errors.push(LexError::UnexpectedChar { ch, span });
+                    continue;
                 }
             };
 
@@ -410,7 +433,7 @@ impl Lexer {
             span: self.current_span(),
         });
 
-        Ok(tokens)
+        (tokens, errors)
     }
 
     /// Consumes an identifier or keyword starting with `first_char`.
@@ -511,7 +534,7 @@ impl Lexer {
     /// # Errors
     /// - [`LexError::UnterminatedString`] if EOF is reached before the closing `"`.
     /// - [`LexError::InvalidEscape`] if a backslash is followed by an unrecognised character.
-    fn lex_string(&mut self, open_span: Span) -> Result<TokenKind, LexError> {
+    fn lex_string(&mut self, open_span: Span, errors: &mut Vec<LexError>) -> TokenKind {
         let mut text = String::new();
 
         loop {
@@ -520,14 +543,15 @@ impl Lexer {
             // position, because that's where the programmer made the mistake.
 
             if self.is_at_end() {
-                return Err(LexError::UnterminatedString { span: open_span });
+                errors.push(LexError::UnterminatedString { span: open_span });
+                return TokenKind::StringLit(text);
             }
 
             let ch = self.advance();
 
             match ch {
                 // Closing quote — string is complete, return what we collected.
-                '"' => return Ok(TokenKind::StringLit(text)),
+                '"' => return TokenKind::StringLit(text),
 
                 // Escape sequence — the next character has special meaning.
                 '\\' => {
@@ -543,12 +567,14 @@ impl Lexer {
                         't' => text.push('\t'),  // tab
 
                         // HULK spec §A.2.2: only \", \\, \n, \t are valid escapes.
-                        // Any other \X is a hard error — silent pass-through would hide bugs.
+                        // Any other \X is a hard error — record and skip rather
+                        // than abort, so the rest of the string (and file) can
+                        // still be scanned.
                         other => {
-                            return Err(LexError::InvalidEscape {
+                            errors.push(LexError::InvalidEscape {
                                 ch: other,
                                 span: escape_span,
-                            })
+                            });
                         }
                     }
                 }
@@ -687,5 +713,29 @@ mod tests {
                 TokenKind::Eof,
             ]
         );
+    }
+
+    #[test]
+    fn test_tokenize_recovering_reports_multiple_lexical_errors() {
+        let (tokens, errors) = Lexer::new("# + ?").tokenize_recovering();
+        assert_eq!(errors.len(), 2);
+        assert!(matches!(errors[0], LexError::UnexpectedChar { ch: '#', .. }));
+        assert!(matches!(errors[1], LexError::UnexpectedChar { ch: '?', .. }));
+        assert!(tokens.iter().any(|t| matches!(t.kind, TokenKind::Plus)));
+    }
+
+    #[test]
+    fn test_tokenize_recovering_continues_after_invalid_escape_in_string() {
+        let (tokens, errors) = Lexer::new(r#""a\qb" + 1"#).tokenize_recovering();
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(errors[0], LexError::InvalidEscape { ch: 'q', .. }));
+        assert!(matches!(&tokens[0].kind, TokenKind::StringLit(s) if s == "ab"));
+        assert!(tokens.iter().any(|t| matches!(t.kind, TokenKind::Plus)));
+    }
+
+    #[test]
+    fn test_tokenize_invalid_escape_still_returns_single_error() {
+        let err = lex_err(r#""a\qb" + 1"#);
+        assert!(matches!(err, LexError::InvalidEscape { ch: 'q', .. }));
     }
 }
