@@ -1,0 +1,4 @@
+function double(x: Number): Number {
+    x * 2;
+}
+print(double(21));

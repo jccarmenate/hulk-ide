@@ -1,0 +1,5 @@
+let x = 42 in
+    match x {
+        case 0 => print("zero");
+        case n => print("nonzero");
+    };

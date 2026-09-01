@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hulk-ast",
+    "crates/hulk-lexer",
+    "crates/hulk-parser",
+    "crates/hulk-semantic",
+    "crates/hulk-codegen",
+    "crates/hulk-rt",
+    "crates/hulk-transpile",
+    "crates/hulk-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"

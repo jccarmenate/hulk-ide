@@ -1,0 +1,10 @@
+type Animal { sound(): String { "..."; } }
+type Dog inherits Animal { sound(): String { "Woof"; } }
+type Cat inherits Animal { sound(): String { "Meow"; } }
+
+let a: Animal = new Dog() in
+    match a {
+        case d: Dog => print(d.sound());
+        case c: Cat => print(c.sound());
+        case _ => print("unknown");
+    };

@@ -1,0 +1,4 @@
+[package]
+name = "hulk-ast"
+version.workspace = true
+edition.workspace = true

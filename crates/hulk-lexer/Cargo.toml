@@ -1,0 +1,4 @@
+[package]
+name = "hulk-lexer"
+version.workspace = true
+edition.workspace = true

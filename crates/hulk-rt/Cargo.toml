@@ -1,0 +1,13 @@
+[package]
+name = "hulk-rt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "hulk_rt"
+crate-type = ["staticlib", "rlib"]
+
+[dev-dependencies]
+serial_test = "3"
+libc = "0.2"

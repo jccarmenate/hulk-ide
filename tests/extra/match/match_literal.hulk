@@ -1,0 +1,6 @@
+let x = 42 in
+    match x {
+        case 1 => print("one");
+        case 42 => print("forty-two");
+        case _ => print("other");
+    };

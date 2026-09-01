@@ -1,0 +1,19 @@
+[package]
+name = "hulk-codegen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[dependencies]
+hulk-ast = { path = "../hulk-ast" }
+hulk-semantic = { path = "../hulk-semantic" }
+hulk-rt = { path = "../hulk-rt" }
+indexmap = { version = "2.0", features = ["std"] } 
+inkwell = { version = "0.8.0", features = ["llvm17-0"] }
+
+[dev-dependencies]
+hulk-lexer = { path = "../hulk-lexer" }
+hulk-parser = { path = "../hulk-parser" }
+hulk-transpile = { path = "../hulk-transpile" }
+tempfile = "3"

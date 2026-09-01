@@ -1,0 +1,3 @@
+let squares = [x * x | x in range(1, 6)] in
+    for (s in squares)
+        print(s);

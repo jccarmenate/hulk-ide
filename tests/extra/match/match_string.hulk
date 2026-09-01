@@ -1,0 +1,12 @@
+function describe(s: String): String {
+    match s {
+        case "hello" => "greeting";
+        case "bye" => "farewell";
+        case _ => "unknown";
+    }
+}
+{
+    print(describe("hello"));
+    print(describe("bye"));
+    print(describe("world"));
+}

@@ -1,0 +1,11 @@
+[package]
+name    = "hulk-transpile"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+hulk-ast = { path = "../hulk-ast" }
+
+[dev-dependencies]
+hulk-lexer  = { path = "../hulk-lexer" }
+hulk-parser = { path = "../hulk-parser" }

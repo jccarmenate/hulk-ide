@@ -1,0 +1,8 @@
+[package]
+name = "hulk-parser"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+hulk-ast = { path = "../hulk-ast" }
+hulk-lexer = { path = "../hulk-lexer" }
