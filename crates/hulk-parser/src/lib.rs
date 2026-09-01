@@ -31,6 +31,13 @@ pub fn parse(tokens: Vec<Token>) -> Result<Program, ParseError> {
     Ll1Parser::new(tokens).parse_program()
 }
 
+/// Parses a complete HULK program from a token stream, recovering from
+/// errors at top-level-declaration granularity instead of stopping at the
+/// first one. See [`Ll1Parser::parse_program_recovering`].
+pub fn parse_recovering(tokens: Vec<Token>) -> (Program, Vec<ParseError>) {
+    Ll1Parser::new(tokens).parse_program_recovering()
+}
+
 /// Public name that makes the chosen parsing strategy explicit.
 ///
 /// `Parser` is kept as a type alias for compatibility with older code that was
@@ -149,6 +156,67 @@ impl Ll1Parser {
         self.consume(&TokenKind::Eof, "end of file")?;
 
         Ok(Program::new(declarations, entry))
+    }
+
+    /// Parses a full HULK program like [`Ll1Parser::parse_program`], but
+    /// never stops at the first error.
+    ///
+    /// Recovery granularity is one top-level declaration: if a `function`,
+    /// `def`, `type`, or `protocol` declaration fails to parse, the error is
+    /// recorded and the parser skips tokens until it finds one that starts
+    /// another declaration or the entry expression, then continues. If the
+    /// trailing entry expression itself fails to parse (or is missing), the
+    /// error is recorded and a placeholder `0` literal is used as the entry
+    /// so the returned `Program` is always well-formed.
+    pub fn parse_program_recovering(&mut self) -> (Program, Vec<ParseError>) {
+        let mut declarations = Vec::new();
+        let mut errors = Vec::new();
+
+        while self.lookahead_starts_declaration() {
+            match self.parse_declaration() {
+                Ok(decl) => declarations.push(decl),
+                Err(err) => {
+                    errors.push(err);
+                    self.synchronize_to_next_declaration();
+                }
+            }
+        }
+
+        let entry = if self.lookahead_starts_expression() {
+            match self.parse_expression() {
+                Ok(expr) => {
+                    self.consume_optional_semicolons();
+                    expr
+                }
+                Err(err) => {
+                    let span = err.span;
+                    errors.push(err);
+                    Expr::number(0.0, span)
+                }
+            }
+        } else {
+            let span = self.peek_span();
+            errors.push(ParseError::new(
+                ParseErrorKind::ExpectedExpression {
+                    found: token_kind_name(&self.peek().kind),
+                },
+                span,
+            ));
+            Expr::number(0.0, span)
+        };
+
+        (Program::new(declarations, entry), errors)
+    }
+
+    /// Skips tokens until one that starts a new top-level declaration or the
+    /// entry expression, or end of file — whichever comes first.
+    fn synchronize_to_next_declaration(&mut self) {
+        while !self.is_at_end()
+            && !self.lookahead_starts_declaration()
+            && !self.lookahead_starts_expression()
+        {
+            self.advance();
+        }
     }
 
     fn parse_declaration(&mut self) -> Result<Declaration, ParseError> {
@@ -2074,6 +2142,44 @@ mod tests {
             }
             other => panic!("expected let entry, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn parse_recovering_reports_error_per_broken_declaration_and_keeps_valid_ones() {
+        let source = "function broken(x: Number\nfunction tan(x: Number): Number => sin(x) / cos(x);\nprint(tan(PI));";
+        let tokens = Lexer::new(source).tokenize().expect("valid tokens");
+        let (program, errors) = parse_recovering(tokens);
+
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(
+            errors[0].kind,
+            ParseErrorKind::UnexpectedToken { .. }
+        ));
+
+        assert_eq!(program.declarations.len(), 1);
+        match &program.declarations[0].kind {
+            DeclarationKind::Function(function) => assert_eq!(function.name, "tan"),
+            other => panic!("expected function declaration, got {other:?}"),
+        }
+        assert!(matches!(program.entry.kind, ExprKind::Call(_)));
+    }
+
+    #[test]
+    fn parse_recovering_falls_back_to_placeholder_entry_when_entry_expression_missing() {
+        let source = "function tan(x: Number): Number => sin(x) / cos(x);\n)";
+        let tokens = Lexer::new(source).tokenize().expect("valid tokens");
+        let (program, errors) = parse_recovering(tokens);
+
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(
+            errors[0].kind,
+            ParseErrorKind::ExpectedExpression { .. }
+        ));
+        assert_eq!(program.declarations.len(), 1);
+        assert!(matches!(
+            program.entry.kind,
+            ExprKind::Literal(Literal::Number(n)) if n == 0.0
+        ));
     }
 
     #[test]
