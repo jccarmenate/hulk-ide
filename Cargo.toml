@@ -9,6 +9,7 @@ members = [
     "crates/hulk-rt",
     "crates/hulk-transpile",
     "crates/hulk-cli",
+    "crates/hulk-lsp",
 ]
 
 [workspace.package]

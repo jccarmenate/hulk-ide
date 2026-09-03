@@ -1,0 +1,18 @@
+[package]
+name = "hulk-lsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "hulk-lsp"
+path = "src/main.rs"
+
+[dependencies]
+hulk-ast = { path = "../hulk-ast" }
+hulk-lexer = { path = "../hulk-lexer" }
+hulk-parser = { path = "../hulk-parser" }
+hulk-transpile = { path = "../hulk-transpile" }
+hulk-semantic = { path = "../hulk-semantic" }
+tower-lsp = "0.20.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std"] }
