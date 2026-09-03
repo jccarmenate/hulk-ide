@@ -31,3 +31,6 @@ target
 hulk
 output.o
 output
+
+# Claude Code worktrees
+.claude/
