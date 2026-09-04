@@ -3,6 +3,7 @@
 //! Speaks LSP over stdio, as every editor integration expects.
 
 mod backend;
+mod diagnostics;
 
 use tower_lsp::{LspService, Server};
 
