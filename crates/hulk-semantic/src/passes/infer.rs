@@ -180,7 +180,7 @@ impl<'a> InferState<'a> {
                 .as_ref()
                 .map(|tr| self.resolve_type_ref(tr))
                 .unwrap_or(Type::Unknown);
-            env.declare(&p.name, ty.clone(), SourceSpan::new(0, 0));
+            env.declare(&p.name, ty.clone(), p.name_span);
             if p.type_annotation.is_none() {
                 self.param_constraints.insert(p.name.clone(), Vec::new());
             }

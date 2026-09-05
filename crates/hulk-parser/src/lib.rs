@@ -478,13 +478,14 @@ impl Ll1Parser {
 
         if !self.check(&TokenKind::RParen) {
             loop {
+                let name_span = self.peek_span();
                 let name = self.parse_name()?;
                 let type_annotation = if self.match_kind(&TokenKind::Colon) {
                     Some(self.parse_type_ref()?)
                 } else {
                     None
                 };
-                params.push(Param::new(name, type_annotation));
+                params.push(Param::new(name, type_annotation, name_span));
 
                 if !self.match_kind(&TokenKind::Comma) {
                     break;
@@ -2057,6 +2058,17 @@ mod tests {
                     function.return_type.as_ref().map(ToString::to_string),
                     Some("Number".to_string())
                 );
+            }
+            other => panic!("expected function declaration, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn param_name_span_points_at_the_parameter_name() {
+        let program = parse_source("function f(x: Number): Number => x; f(1);");
+        match &program.declarations[0].kind {
+            DeclarationKind::Function(function) => {
+                assert_eq!(function.params[0].name_span, SourceSpan::new(1, 12));
             }
             other => panic!("expected function declaration, got {other:?}"),
         }

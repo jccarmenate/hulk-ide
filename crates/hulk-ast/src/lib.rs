@@ -216,13 +216,21 @@ impl ProtocolMethod {
 pub struct Param {
     pub name: String,
     pub type_annotation: Option<TypeRef>,
+    /// The source location of the parameter name itself — not the whole
+    /// parameter (e.g. not its type annotation).
+    pub name_span: SourceSpan,
 }
 
 impl Param {
-    pub fn new(name: impl Into<String>, type_annotation: Option<TypeRef>) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        type_annotation: Option<TypeRef>,
+        name_span: SourceSpan,
+    ) -> Self {
         Self {
             name: name.into(),
             type_annotation,
+            name_span,
         }
     }
 }
