@@ -364,7 +364,7 @@ impl<'a> InferState<'a> {
                     .as_ref()
                     .map(|tr| self.resolve_type_ref(tr))
                     .unwrap_or(Type::Unknown);
-                env.declare(&param.name, ty, SourceSpan::new(0, 0));
+                env.declare(&param.name, ty, param.name_span);
             }
             let args: Vec<TypedExpr> = p
                 .args
