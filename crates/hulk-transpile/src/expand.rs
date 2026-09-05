@@ -348,6 +348,7 @@ fn rebuild_expr_children(
                     b.name,
                     b.type_annotation,
                     ex!(b.initializer),
+                    b.name_span,
                 )).collect(),
                 ex!(*l.body),
             )),

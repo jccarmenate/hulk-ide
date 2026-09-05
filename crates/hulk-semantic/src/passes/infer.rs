@@ -956,7 +956,7 @@ impl<'a> InferState<'a> {
             env.declare(
                 &binding.name,
                 declared_type.clone(),
-                binding.initializer.span,
+                binding.name_span,
             );
 
             // 2d. Store the typed binding.
@@ -964,6 +964,7 @@ impl<'a> InferState<'a> {
                 &binding.name,
                 binding.type_annotation.clone(),
                 typed_init,
+                binding.name_span,
             ));
         }
 

@@ -420,6 +420,7 @@ mod tests {
                 name,
                 type_annotation: None,
                 initializer: *Box::new(init),
+                name_span: dummy_span(),
             })
             .collect();
         Expr {

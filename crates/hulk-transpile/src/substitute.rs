@@ -144,6 +144,7 @@ pub fn substitute(expr: &Expr, subst: &SubstMap) -> Expr {
                     new_name,
                     b.type_annotation.clone(),
                     substitute(&b.initializer, subst),
+                    b.name_span,
                 )
             }).collect();
             let new_body = substitute(&let_expr.body, subst);

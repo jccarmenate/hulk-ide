@@ -457,6 +457,9 @@ pub struct LetBinding<A = ()> {
     pub name: String,
     pub type_annotation: Option<TypeRef>,
     pub initializer: Expr<A>,
+    /// The source location of the bound name itself — not the whole
+    /// binding (e.g. not its initializer expression).
+    pub name_span: SourceSpan,
 }
 
 impl<A> LetBinding<A> {
@@ -464,11 +467,13 @@ impl<A> LetBinding<A> {
         name: impl Into<String>,
         type_annotation: Option<TypeRef>,
         initializer: Expr<A>,
+        name_span: SourceSpan,
     ) -> Self {
         Self {
             name: name.into(),
             type_annotation,
             initializer,
+            name_span,
         }
     }
 }
@@ -1103,7 +1108,7 @@ mod tests {
     fn builds_let_expression() {
         let expr = Expr::new(
             ExprKind::Let(LetExpr::new(
-                vec![LetBinding::new("x", None, Expr::number(5.0, s()))],
+                vec![LetBinding::new("x", None, Expr::number(5.0, s()), s())],
                 Expr::binary(
                     BinaryOp::Add,
                     Expr::variable("x", s()),

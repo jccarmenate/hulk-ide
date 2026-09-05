@@ -1168,6 +1168,7 @@ impl Ll1Parser {
         let mut bindings = Vec::new();
 
         loop {
+            let name_span = self.peek_span();
             let name = self.parse_name()?;
             let type_annotation = if self.match_kind(&TokenKind::Colon) {
                 Some(self.parse_type_ref()?)
@@ -1177,7 +1178,7 @@ impl Ll1Parser {
 
             self.consume(&TokenKind::Assign, "`=` in let binding")?;
             let initializer = self.parse_expression()?;
-            bindings.push(LetBinding::new(name, type_annotation, initializer));
+            bindings.push(LetBinding::new(name, type_annotation, initializer, name_span));
 
             if !self.match_kind(&TokenKind::Comma) {
                 break;
@@ -2089,6 +2090,17 @@ mod tests {
                     Some("Number".to_string())
                 );
                 assert!(matches!(let_expr.body.kind, ExprKind::Binary(_)));
+            }
+            other => panic!("expected let entry, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn let_binding_name_span_points_at_the_bound_name() {
+        let program = parse_source("let x = 5 in x + 1;");
+        match &program.entry.kind {
+            ExprKind::Let(let_expr) => {
+                assert_eq!(let_expr.bindings[0].name_span, SourceSpan::new(1, 5));
             }
             other => panic!("expected let entry, got {other:?}"),
         }
