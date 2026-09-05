@@ -627,13 +627,17 @@ impl<A> LambdaExpr<A> {
 pub struct MemberExpr<A = ()> {
     pub object: Box<Expr<A>>,
     pub member: String,
+    /// The source location of the member name itself (the identifier
+    /// after the `.`) — not the receiver, and not the whole expression.
+    pub member_span: SourceSpan,
 }
 
 impl<A> MemberExpr<A> {
-    pub fn new(object: Expr<A>, member: impl Into<String>) -> Self {
+    pub fn new(object: Expr<A>, member: impl Into<String>, member_span: SourceSpan) -> Self {
         Self {
             object: Box::new(object),
             member: member.into(),
+            member_span,
         }
     }
 }

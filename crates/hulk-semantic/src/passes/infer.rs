@@ -1481,7 +1481,7 @@ impl<'a> InferState<'a> {
             if matches!(obj_type, Type::Unknown) {
                 self.constrain_if_variable(&typed_obj, owner_type);
             }
-            let typed_member = MemberExpr::new(typed_obj, &member.member);
+            let typed_member = MemberExpr::new(typed_obj, &member.member, member.member_span);
             typed_expr(
                 ExprKind::Member(typed_member),
                 member_type,
@@ -1499,6 +1499,7 @@ impl<'a> InferState<'a> {
                 ExprKind::Member(MemberExpr {
                     object: Box::new(typed_obj),
                     member: member.member.clone(),
+                    member_span: member.member_span,
                 }),
                 Type::Error,
                 member.object.span,

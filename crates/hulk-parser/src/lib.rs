@@ -911,8 +911,12 @@ impl Ll1Parser {
                     expr = Expr::call(expr, args, span);
                 }
             } else if self.match_kind(&TokenKind::Dot) {
+                let member_span = self.peek_span();
                 let member = self.parse_name()?;
-                expr = Expr::new(ExprKind::Member(MemberExpr::new(expr, member)), span);
+                expr = Expr::new(
+                    ExprKind::Member(MemberExpr::new(expr, member, member_span)),
+                    span,
+                );
             } else if self.match_kind(&TokenKind::LBracket) {
                 let index = self.parse_expression()?;
                 self.consume(&TokenKind::RBracket, "`]` after index expression")?;
@@ -2042,6 +2046,17 @@ mod tests {
                 other => panic!("expected binary argument, got {other:?}"),
             },
             other => panic!("expected call entry, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn member_span_points_at_the_member_name_not_the_receiver() {
+        let program = parse_source("a.b;");
+        match &program.entry.kind {
+            ExprKind::Member(member) => {
+                assert_eq!(member.member_span, SourceSpan::new(1, 3));
+            }
+            other => panic!("expected member entry, got {other:?}"),
         }
     }
 

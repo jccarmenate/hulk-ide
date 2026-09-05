@@ -235,7 +235,11 @@ pub fn substitute(expr: &Expr, subst: &SubstMap) -> Expr {
             expr.span,
         ),
         ExprKind::Member(m) => Expr::new(
-            ExprKind::Member(MemberExpr::new(substitute(&m.object, subst), m.member.clone())),
+            ExprKind::Member(MemberExpr::new(
+                substitute(&m.object, subst),
+                m.member.clone(),
+                m.member_span,
+            )),
             expr.span,
         ),
         ExprKind::New(n) => Expr::new(
