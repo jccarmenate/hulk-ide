@@ -1232,6 +1232,7 @@ impl Ll1Parser {
 
     fn finish_for_expression(&mut self, span: SourceSpan) -> Result<Expr, ParseError> {
         self.consume(&TokenKind::LParen, "`(` before for binding")?;
+        let var_span = self.peek_span();
         let var = self.parse_name()?;
         self.consume(&TokenKind::In, "`in` inside for binding")?;
         let iterable = self.parse_expression()?;
@@ -1239,7 +1240,7 @@ impl Ll1Parser {
         let body = self.parse_expression()?;
 
         Ok(Expr::new(
-            ExprKind::For(ForExpr::new(var, iterable, body)),
+            ExprKind::For(ForExpr::new(var, iterable, body, var_span)),
             span,
         ))
     }
@@ -2158,6 +2159,17 @@ mod tests {
         match program.entry.kind {
             ExprKind::Let(let_expr) => assert!(matches!(let_expr.body.kind, ExprKind::While(_))),
             other => panic!("expected let entry, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn for_var_span_points_at_the_loop_variable() {
+        let program = parse_source("for (x in range(1, 10)) print(x);");
+        match &program.entry.kind {
+            ExprKind::For(for_expr) => {
+                assert_eq!(for_expr.var_span, SourceSpan::new(1, 6));
+            }
+            other => panic!("expected for entry, got {other:?}"),
         }
     }
 

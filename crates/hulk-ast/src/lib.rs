@@ -579,14 +579,18 @@ pub struct ForExpr<A = ()> {
     pub var: String,
     pub iterable: Box<Expr<A>>,
     pub body: Box<Expr<A>>,
+    /// The source location of the loop variable name itself — not the
+    /// whole `for` expression.
+    pub var_span: SourceSpan,
 }
 
 impl<A> ForExpr<A> {
-    pub fn new(var: impl Into<String>, iterable: Expr<A>, body: Expr<A>) -> Self {
+    pub fn new(var: impl Into<String>, iterable: Expr<A>, body: Expr<A>, var_span: SourceSpan) -> Self {
         Self {
             var: var.into(),
             iterable: Box::new(iterable),
             body: Box::new(body),
+            var_span,
         }
     }
 }

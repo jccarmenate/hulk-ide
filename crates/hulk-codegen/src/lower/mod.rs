@@ -644,6 +644,7 @@ mod tests {
                 var: var.to_string(),
                 iterable: Box::new(iterable),
                 body: Box::new(body),
+                var_span: dummy_span(),
             }),
             anno: ty,
             span: dummy_span(),

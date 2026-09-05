@@ -184,6 +184,7 @@ pub fn substitute(expr: &Expr, subst: &SubstMap) -> Expr {
                 f.var.clone(),
                 substitute(&f.iterable, subst),
                 substitute(&f.body, subst),
+                f.var_span,
             )),
             expr.span,
         ),

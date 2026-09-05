@@ -1273,12 +1273,12 @@ impl<'a> InferState<'a> {
 
         // Push scope, declare loop variable.
         env.push_scope();
-        env.declare(&for_expr.var, element_type.clone(), for_expr.iterable.span);
+        env.declare(&for_expr.var, element_type.clone(), for_expr.var_span);
         let body = self.infer_expr(&for_expr.body, env);
         env.pop_scope();
 
         let result_type = body.anno.clone();
-        let for_typed = ForExpr::new(&for_expr.var, iterable, body);
+        let for_typed = ForExpr::new(&for_expr.var, iterable, body, for_expr.var_span);
         typed_expr(
             ExprKind::For(for_typed),
             result_type,
