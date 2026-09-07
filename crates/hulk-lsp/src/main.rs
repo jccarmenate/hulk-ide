@@ -3,6 +3,7 @@
 //! Speaks LSP over stdio, as every editor integration expects.
 
 mod backend;
+mod completion;
 mod diagnostics;
 mod resolve;
 
