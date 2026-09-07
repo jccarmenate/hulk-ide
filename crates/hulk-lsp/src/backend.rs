@@ -8,12 +8,15 @@ use std::sync::RwLock;
 
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Hover,
-    HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-    InitializedParams, MarkupContent, MarkupKind, Position, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, Url,
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverContents, HoverParams,
+    HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams, Location,
+    MarkupContent, MarkupKind, OneOf, Position, ServerCapabilities, TextDocumentSyncCapability,
+    TextDocumentSyncKind, Url,
 };
 use tower_lsp::{Client, LanguageServer};
+
+use hulk_semantic::TypeRegistry;
 
 use crate::diagnostics::compute_diagnostics;
 
@@ -24,6 +27,7 @@ pub fn server_capabilities() -> ServerCapabilities {
     ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
+        definition_provider: Some(OneOf::Left(true)),
         ..ServerCapabilities::default()
     }
 }
@@ -39,6 +43,58 @@ fn hover_response(verified: &hulk_semantic::VerifiedProgram, position: Position)
         }),
         range: None,
     })
+}
+
+/// Builds a go-to-definition response for `position`, or `None` if
+/// nothing resolves there, or what resolves there has no known
+/// definition location (see this plan's "Known limitations").
+fn definition_response(
+    verified: &hulk_semantic::VerifiedProgram,
+    uri: &Url,
+    position: Position,
+) -> Option<GotoDefinitionResponse> {
+    let hit = crate::resolve::resolve_at(&verified.typed_program, position)?;
+    let span = definition_span_for(&hit, &verified.registry)?;
+    Some(GotoDefinitionResponse::Scalar(Location {
+        uri: uri.clone(),
+        range: crate::diagnostics::span_to_range(span.line, span.col),
+    }))
+}
+
+/// Resolves a `Hit`'s definition location. For a variable/`self`/parameter
+/// reference this is already known (`resolve_at` found it via scope). For
+/// a `.member` reference, `resolve_at` deliberately leaves it unresolved —
+/// that needs the type registry: look the member up as a method first
+/// (methods have a pre-flattened, inheritance-aware table via
+/// `lookup_method`), then as an attribute, walking up the inheritance
+/// chain by hand since `TypeInfo.attributes` only holds a type's *own*
+/// attributes, not inherited ones.
+fn definition_span_for(
+    hit: &crate::resolve::Hit,
+    registry: &TypeRegistry,
+) -> Option<hulk_ast::SourceSpan> {
+    if hit.definition.is_some() {
+        return hit.definition;
+    }
+
+    let receiver_type = hit.receiver_type.as_ref()?;
+    if let Some(method) = registry.lookup_method(receiver_type, &hit.name) {
+        return Some(method.span);
+    }
+
+    let mut current = match receiver_type {
+        hulk_semantic::Type::Named(name) => Some(name.clone()),
+        _ => None,
+    };
+    while let Some(type_name) = current {
+        if let Some(info) = registry.lookup_type(&type_name) {
+            if let Some(attr) = info.attributes.get(&hit.name) {
+                return Some(attr.span);
+            }
+        }
+        current = registry.parent_of(&type_name);
+    }
+    None
 }
 
 /// The HULK language server.
@@ -142,6 +198,22 @@ impl LanguageServer for Backend {
         Ok(response)
     }
 
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+        let response = self
+            .documents
+            .read()
+            .unwrap()
+            .get(&uri)
+            .and_then(|state| state.last_good.as_ref())
+            .and_then(|verified| definition_response(verified, &uri, position));
+        Ok(response)
+    }
+
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = params.text_document.uri;
         self.documents.write().unwrap().remove(&uri);
@@ -185,5 +257,42 @@ mod tests {
     fn hover_response_is_none_over_a_literal() {
         let verified = test_analyze("print(1);");
         assert!(hover_response(&verified, Position { line: 0, character: 6 }).is_none());
+    }
+
+    #[test]
+    fn definition_response_finds_a_let_binding() {
+        let verified = test_analyze("let x = 5 in\nx + 1;");
+        let uri = Url::parse("file:///t.hulk").unwrap();
+        let response = definition_response(&verified, &uri, Position { line: 1, character: 0 })
+            .expect("response");
+        match response {
+            GotoDefinitionResponse::Scalar(location) => {
+                assert_eq!(location.range.start, Position { line: 0, character: 4 });
+            }
+            other => panic!("expected scalar response, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn definition_response_finds_a_method_via_the_type_registry() {
+        let verified = test_analyze("type A {\n    b(): Number => 1;\n}\nnew A().b();");
+        let uri = Url::parse("file:///t.hulk").unwrap();
+        let response = definition_response(&verified, &uri, Position { line: 3, character: 8 })
+            .expect("response");
+        match response {
+            GotoDefinitionResponse::Scalar(location) => {
+                assert_eq!(location.range.start.line, 1);
+            }
+            other => panic!("expected scalar response, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn definition_response_is_none_over_a_literal() {
+        let verified = test_analyze("print(1);");
+        let uri = Url::parse("file:///t.hulk").unwrap();
+        assert!(
+            definition_response(&verified, &uri, Position { line: 0, character: 6 }).is_none()
+        );
     }
 }
