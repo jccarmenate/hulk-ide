@@ -8,11 +8,11 @@ use std::sync::RwLock;
 
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverContents, HoverParams,
-    HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams, Location,
-    MarkupContent, MarkupKind, OneOf, Position, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Url,
+    CompletionOptions, CompletionParams, CompletionResponse, DidChangeTextDocumentParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, GotoDefinitionParams,
+    GotoDefinitionResponse, Hover, HoverContents, HoverParams, HoverProviderCapability,
+    InitializeParams, InitializeResult, InitializedParams, Location, MarkupContent, MarkupKind,
+    OneOf, Position, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, Url,
 };
 use tower_lsp::{Client, LanguageServer};
 
@@ -28,6 +28,10 @@ pub fn server_capabilities() -> ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
         definition_provider: Some(OneOf::Left(true)),
+        completion_provider: Some(CompletionOptions {
+            trigger_characters: Some(vec![".".to_string()]),
+            ..CompletionOptions::default()
+        }),
         ..ServerCapabilities::default()
     }
 }
@@ -214,6 +218,22 @@ impl LanguageServer for Backend {
         Ok(response)
     }
 
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let uri = params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
+        let items = {
+            let docs = self.documents.read().unwrap();
+            let Some(state) = docs.get(&uri) else {
+                return Ok(None);
+            };
+            let Some(verified) = state.last_good.as_ref() else {
+                return Ok(None);
+            };
+            crate::completion::completion_items(verified, &state.text, position)
+        };
+        Ok(Some(CompletionResponse::Array(items)))
+    }
+
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = params.text_document.uri;
         self.documents.write().unwrap().remove(&uri);
@@ -234,6 +254,13 @@ mod tests {
             caps.text_document_sync,
             Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL))
         );
+    }
+
+    #[test]
+    fn server_capabilities_trigger_completion_on_dot() {
+        let caps = server_capabilities();
+        let completion = caps.completion_provider.expect("completion provider");
+        assert_eq!(completion.trigger_characters, Some(vec![".".to_string()]));
     }
 
     fn test_analyze(source: &str) -> hulk_semantic::VerifiedProgram {
