@@ -8,8 +8,9 @@ use std::sync::RwLock;
 
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    InitializeParams, InitializeResult, InitializedParams, ServerCapabilities,
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams, Hover,
+    HoverContents, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
+    InitializedParams, MarkupContent, MarkupKind, Position, ServerCapabilities,
     TextDocumentSyncCapability, TextDocumentSyncKind, Url,
 };
 use tower_lsp::{Client, LanguageServer};
@@ -22,8 +23,22 @@ use crate::diagnostics::compute_diagnostics;
 pub fn server_capabilities() -> ServerCapabilities {
     ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
+        hover_provider: Some(HoverProviderCapability::Simple(true)),
         ..ServerCapabilities::default()
     }
+}
+
+/// Builds a hover response for `position`, or `None` if nothing resolves
+/// there (e.g. the cursor is over a literal, keyword, or punctuation).
+fn hover_response(verified: &hulk_semantic::VerifiedProgram, position: Position) -> Option<Hover> {
+    let hit = crate::resolve::resolve_at(&verified.typed_program, position)?;
+    Some(Hover {
+        contents: HoverContents::Markup(MarkupContent {
+            kind: MarkupKind::Markdown,
+            value: format!("```hulk\n{}: {}\n```", hit.name, hit.ty),
+        }),
+        range: None,
+    })
 }
 
 /// The HULK language server.
@@ -114,6 +129,19 @@ impl LanguageServer for Backend {
         self.publish_for(uri).await;
     }
 
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+        let response = self
+            .documents
+            .read()
+            .unwrap()
+            .get(&uri)
+            .and_then(|state| state.last_good.as_ref())
+            .and_then(|verified| hover_response(verified, position));
+        Ok(response)
+    }
+
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = params.text_document.uri;
         self.documents.write().unwrap().remove(&uri);
@@ -134,5 +162,28 @@ mod tests {
             caps.text_document_sync,
             Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL))
         );
+    }
+
+    fn test_analyze(source: &str) -> hulk_semantic::VerifiedProgram {
+        let tokens = hulk_lexer::Lexer::new(source).tokenize().expect("valid tokens");
+        let mut program = hulk_parser::parse(tokens).expect("valid parse");
+        hulk_transpile::expand_program(&mut program);
+        hulk_semantic::analyze(&program).expect("valid program")
+    }
+
+    #[test]
+    fn hover_response_shows_the_resolved_type() {
+        let verified = test_analyze("let x = 5 in\nx + 1;");
+        let hover = hover_response(&verified, Position { line: 1, character: 0 }).expect("hover");
+        match hover.contents {
+            HoverContents::Markup(markup) => assert!(markup.value.contains("x: Number")),
+            other => panic!("expected markup hover, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn hover_response_is_none_over_a_literal() {
+        let verified = test_analyze("print(1);");
+        assert!(hover_response(&verified, Position { line: 0, character: 6 }).is_none());
     }
 }
