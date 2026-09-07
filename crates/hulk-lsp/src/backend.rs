@@ -114,6 +114,21 @@ struct DocumentState {
     last_good: Option<hulk_semantic::VerifiedProgram>,
 }
 
+/// Updates a document's text in place, preserving `last_good` if the
+/// document is already known — that's the whole point of caching it:
+/// hover/completion/go-to-definition keep working off the last valid
+/// state while the user is mid-edit and the new text doesn't parse.
+/// Inserts a fresh entry (with no `last_good` yet) if the document isn't
+/// tracked yet.
+fn update_text(documents: &mut HashMap<Url, DocumentState>, uri: Url, text: String) {
+    match documents.get_mut(&uri) {
+        Some(state) => state.text = text,
+        None => {
+            documents.insert(uri, DocumentState { text, last_good: None });
+        }
+    }
+}
+
 impl Backend {
     pub fn new(client: Client) -> Self {
         Self {
@@ -162,6 +177,8 @@ impl LanguageServer for Backend {
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = params.text_document.uri.clone();
+        // A fresh open always starts a new document entry — any previous
+        // `last_good` for this URI (from before it was closed) is gone.
         self.documents.write().unwrap().insert(
             uri.clone(),
             DocumentState {
@@ -179,13 +196,7 @@ impl LanguageServer for Backend {
         let Some(change) = params.content_changes.pop() else {
             return;
         };
-        self.documents.write().unwrap().insert(
-            uri.clone(),
-            DocumentState {
-                text: change.text,
-                last_good: None,
-            },
-        );
+        update_text(&mut self.documents.write().unwrap(), uri.clone(), change.text);
         self.publish_for(uri).await;
     }
 
@@ -254,6 +265,26 @@ mod tests {
             caps.text_document_sync,
             Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL))
         );
+    }
+
+    #[test]
+    fn update_text_preserves_last_good_across_a_failed_reparse() {
+        let mut documents = HashMap::new();
+        let uri = Url::parse("file:///t.hulk").unwrap();
+        let verified = test_analyze("print(1);");
+        documents.insert(
+            uri.clone(),
+            DocumentState {
+                text: "print(1);".to_string(),
+                last_good: Some(verified),
+            },
+        );
+
+        update_text(&mut documents, uri.clone(), "print(1".to_string());
+
+        let state = documents.get(&uri).expect("document still tracked");
+        assert_eq!(state.text, "print(1");
+        assert!(state.last_good.is_some(), "last_good should survive a text update");
     }
 
     #[test]

@@ -33,12 +33,22 @@ pub fn compute_diagnostics(text: &str) -> DiagnosticsOutcome {
     }
 
     let (mut program, parse_errors) = hulk_parser::parse_recovering(tokens);
+    // A parser recovering from an error can still produce a `Program` that
+    // analyzes "successfully" — e.g. an unparseable entry expression gets
+    // replaced with a placeholder `0` literal (see Plan 1), which trivially
+    // type-checks. That's not a meaningful state to cache as `last_good`:
+    // it would silently replace whatever real code hover/completion/
+    // go-to-definition were working from with an empty placeholder. Track
+    // whether recovery happened at all so `last_good` is only ever set from
+    // a genuinely clean parse.
+    let had_recovered_errors = !parse_errors.is_empty();
     let mut diagnostics: Vec<Diagnostic> = parse_errors
         .iter()
         .map(|err| diagnostic(err.span.line, err.span.col, DiagnosticSeverity::ERROR, err.to_string()))
         .collect();
 
     let macro_errors = hulk_transpile::expand_program(&mut program);
+    let had_recovered_errors = had_recovered_errors || !macro_errors.is_empty();
     diagnostics.extend(macro_errors.iter().map(|err| {
         diagnostic(err.span.line, err.span.col, DiagnosticSeverity::ERROR, err.kind.to_string())
     }));
@@ -59,7 +69,11 @@ pub fn compute_diagnostics(text: &str) -> DiagnosticsOutcome {
                     .iter()
                     .map(|err| semantic_diagnostic(err, DiagnosticSeverity::WARNING)),
             );
-            Some(verified)
+            if had_recovered_errors {
+                None
+            } else {
+                Some(verified)
+            }
         }
     };
 
@@ -199,5 +213,17 @@ mod tests {
 
         let broken = compute_diagnostics("{ print(a); }");
         assert!(broken.last_good.is_none());
+    }
+
+    #[test]
+    fn last_good_is_absent_when_the_entry_expression_fails_to_parse() {
+        // The parser recovers from this by replacing the unparseable
+        // entry with a placeholder `0` literal (see Plan 1), which then
+        // trivially passes semantic analysis. That placeholder is not a
+        // meaningful "last good" state — caching it would silently erase
+        // whatever real, valid code was cached from before this edit.
+        let outcome = compute_diagnostics("function f(): Number => 1;\n)");
+        assert!(!outcome.diagnostics.is_empty(), "expected a parse error diagnostic");
+        assert!(outcome.last_good.is_none());
     }
 }
