@@ -29,7 +29,14 @@ pub fn server_capabilities() -> ServerCapabilities {
 /// The HULK language server.
 pub struct Backend {
     client: Client,
-    documents: RwLock<HashMap<Url, String>>,
+    documents: RwLock<HashMap<Url, DocumentState>>,
+}
+
+/// Per-document state: the current text, and the most recently
+/// successfully analyzed program (if any is available yet).
+struct DocumentState {
+    text: String,
+    last_good: Option<hulk_semantic::VerifiedProgram>,
 }
 
 impl Backend {
@@ -42,12 +49,24 @@ impl Backend {
 
     /// Recomputes and publishes diagnostics for `uri` from its currently
     /// stored text. No-op if the document isn't open (e.g. it was already
-    /// closed by the time this runs).
+    /// closed by the time this runs). Also refreshes the cached last-good
+    /// analyzed program, when analysis succeeded.
     async fn publish_for(&self, uri: Url) {
-        let text = self.documents.read().unwrap().get(&uri).cloned();
+        let text = {
+            let docs = self.documents.read().unwrap();
+            docs.get(&uri).map(|state| state.text.clone())
+        };
         let Some(text) = text else { return };
-        let diagnostics = compute_diagnostics(&text);
-        self.client.publish_diagnostics(uri, diagnostics, None).await;
+
+        let outcome = compute_diagnostics(&text);
+        if outcome.last_good.is_some() {
+            let mut docs = self.documents.write().unwrap();
+            if let Some(state) = docs.get_mut(&uri) {
+                state.last_good = outcome.last_good;
+            }
+        }
+
+        self.client.publish_diagnostics(uri, outcome.diagnostics, None).await;
     }
 }
 
@@ -68,10 +87,13 @@ impl LanguageServer for Backend {
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = params.text_document.uri.clone();
-        self.documents
-            .write()
-            .unwrap()
-            .insert(uri.clone(), params.text_document.text);
+        self.documents.write().unwrap().insert(
+            uri.clone(),
+            DocumentState {
+                text: params.text_document.text,
+                last_good: None,
+            },
+        );
         self.publish_for(uri).await;
     }
 
@@ -82,7 +104,13 @@ impl LanguageServer for Backend {
         let Some(change) = params.content_changes.pop() else {
             return;
         };
-        self.documents.write().unwrap().insert(uri.clone(), change.text);
+        self.documents.write().unwrap().insert(
+            uri.clone(),
+            DocumentState {
+                text: change.text,
+                last_good: None,
+            },
+        );
         self.publish_for(uri).await;
     }
 
