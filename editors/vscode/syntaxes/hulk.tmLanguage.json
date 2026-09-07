@@ -1,0 +1,68 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "HULK",
+  "scopeName": "source.hulk",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#constants" },
+    { "include": "#types" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.hulk", "match": "//.*$" }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.hulk",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.hulk", "match": "\\\\[\"\\\\nt]" }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.hulk",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.hulk",
+          "match": "\\b(if|elif|else|while|for|in|match|case)\\b"
+        },
+        {
+          "name": "keyword.other.hulk",
+          "match": "\\b(let|function|type|inherits|protocol|extends|new|is|as|def)\\b"
+        },
+        {
+          "name": "variable.language.hulk",
+          "match": "\\b(self|base)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        { "name": "constant.language.boolean.hulk", "match": "\\b(true|false)\\b" },
+        { "name": "support.constant.math.hulk", "match": "\\b(PI|E)\\b" }
+      ]
+    },
+    "types": {
+      "name": "support.type.hulk",
+      "match": "\\b(Number|String|Boolean|Object)\\b"
+    },
+    "operators": {
+      "patterns": [
+        { "name": "keyword.operator.assignment.hulk", "match": ":=|=>|=" },
+        { "name": "keyword.operator.comparison.hulk", "match": "==|!=|<=|>=|<|>" },
+        { "name": "keyword.operator.logical.hulk", "match": "&|\\||!" },
+        { "name": "keyword.operator.arithmetic.hulk", "match": "\\+|-|\\*|/|\\^|%" },
+        { "name": "keyword.operator.string.hulk", "match": "@@|@" }
+      ]
+    }
+  }
+}
