@@ -1,16 +1,26 @@
-# HULK Compiler
+# HULK IDE
 
-![CI](https://github.com/D4R102004/hulk-compiler/actions/workflows/ci.yml/badge.svg)
+> A full IDE — language server, VS Code extension, and a production-quality compiler —
+> for the [HULK language](https://matcom.github.io/hulk/appendix-hulk-syntax.html),
+> implemented entirely in Rust and TypeScript.
 
-> A complete, production-quality compiler for the [HULK language](https://matcom.github.io/hulk/appendix-hulk-syntax.html),
-> implemented entirely in Rust.  
-> Universidad de La Habana — Compilers 2026.
+This project has two layers:
+
+- **The compiler** (`hulk-ast` through `hulk-cli`) began as a joint undergraduate thesis
+  for the Compilers course at Universidad de La Habana, built with [Darío Francisco
+  Alfonso Urrutia](https://github.com/D4R102004) and [Sebastián González
+  Alfonso](https://github.com/sebagonz106) — see [Origins & Team](#origins--team).
+- **The IDE** (`hulk-lsp`, the VS Code extension, and a set of compiler-side fixes —
+  error recovery, precise source spans, a codegen bug fix) is a personal project by
+  [Juan Carlos Carmenate Díaz](https://github.com/jccarmenate), built on top of that
+  compiler with the original team's permission. See [HULK IDE](#hulk-ide-1) below.
 
 ---
 
 ## Table of Contents
 
 - [What is HULK?](#what-is-hulk)
+- [HULK IDE](#hulk-ide-1)
 - [Language Extensions](#language-extensions)
 - [Architecture Overview](#architecture-overview)
 - [Crate Reference](#crate-reference)
@@ -28,7 +38,7 @@
 - [Testing](#testing)
 - [Design Decisions](#design-decisions)
 - [Known Limitations](#known-limitations)
-- [Team](#team)
+- [Origins & Team](#origins--team)
 
 ---
 
@@ -49,6 +59,72 @@ expression; there are no statements. The language supports:
 
 This compiler covers all HULK features through §16.8 of the official specification and adds
 three language extensions described below.
+
+---
+
+## HULK IDE
+
+Everything in this section is new work, built on top of the compiler above: a
+[Language Server Protocol](https://microsoft.github.io/language-server-protocol/) server
+(`hulk-lsp`) and a VS Code extension (`editors/vscode`) that make HULK a language you can
+actually write in, not just compile.
+
+### What it does
+
+- **Live diagnostics** — every lexical, syntactic, macro-expansion, and semantic error/warning
+  shown as you type, recovering from errors instead of stopping at the first one (see
+  [Lexer/parser error recovery](#lexer-hulk-lexer) below).
+- **Hover** — the resolved type of any variable, `self`, or `.member` access.
+- **Go-to-definition** — jumps to a `let`/`for`/parameter/method/attribute declaration,
+  walking the inheritance chain for inherited members.
+- **Completion** — variable/global-function/type names in scope, and `object.` member
+  completion (methods + inherited attributes) from the type registry.
+- **Syntax highlighting** — a TextMate grammar for `.hulk` files.
+- **Run** — compiles and runs the active file via `hulk-cli`, from a command in the editor.
+
+### Architecture
+
+`hulk-lsp` links `hulk-lexer`/`hulk-parser`/`hulk-transpile`/`hulk-semantic` directly as
+libraries — no shelling out to `hulk-cli`, no LLVM dependency (hover/completion/go-to-definition
+don't need codegen). Each open document keeps its current text and the last successfully
+analyzed typed program ("last-good tree"), so those three features keep working off a valid
+prior state even while the file you're actively editing has a syntax error. Position
+resolution (`crates/hulk-lsp/src/resolve.rs`) walks the typed AST directly — every node
+already carries its compiler-resolved type, so hover never re-infers anything; only
+go-to-definition needs its own lightweight scope tracker (the same scope-introduction rules
+`hulk-semantic`'s own `Environment` uses, but tracking positions, not types).
+
+### Try it
+
+```bash
+cd editors/vscode
+npm install
+npm run compile
+# then in VS Code: open editors/vscode, press F5 (Run Extension)
+# or: code --extensionDevelopmentPath="$(pwd)" --new-window path/to/a/file.hulk
+```
+
+The extension looks for the `hulk-lsp` binary at `target/debug/hulk-lsp(.exe)` by default
+(override with the `hulk.serverPath` setting) — build it first with `cargo build -p hulk-lsp`.
+
+### What changed in the compiler to make this possible
+
+This project also fixed real gaps in the compiler itself, found while building the IDE on
+top of it:
+
+- **Lexer/parser error recovery** — `tokenize_recovering`/`parse_recovering` report every
+  error in a pass instead of stopping at the first one, so the editor can show more than one
+  squiggle at a time. `hulk-cli`'s original single-error behavior is untouched.
+- **Precise binding spans** — `Param`, `LetBinding`, `MemberExpr`, and `ForExpr` didn't carry
+  a real source position for the name they introduce (parameters used a hardcoded `(0,0)`,
+  `.member` had no span at all). Go-to-definition and hover needed these to be accurate.
+- **A codegen bug fix** — `let f = obj.method in f()` (a bare method reference) failed LLVM
+  module verification: the `let`-binding retain logic passed a two-word fat-pointer value
+  directly to a function expecting a single pointer. Found and fixed while doing the first-ever
+  real LLVM 17 build-and-run of this compiler (see [Testing](#testing)).
+
+See `docs/superpowers/specs/` and `docs/superpowers/plans/` for the full design spec and the
+implementation plan for each piece above.
 
 ---
 
@@ -178,22 +254,24 @@ The full pipeline is wired together by `hulk-cli`.
 
 ## Requirements
 
-- **Rust** 1.78 or later (`rustup` recommended)
+- **Rust** 1.78 or later (`rustup` recommended) — required for everything except the extension
 - **LLVM 17** development libraries and tools — required only by `hulk-codegen` and `hulk-rt`
-  - Ubuntu/Debian: `apt install llvm-17-dev clang-17`
+  (not needed to build/run `hulk-lsp` or try the IDE's diagnostics/hover/completion/go-to-definition)
+  - Ubuntu/Debian: `apt install llvm-17-dev clang-17`, or run `./scripts/setup_llvm17_ubuntu.sh`
+    (also installs Rust) — this is the easiest path on **Windows too**, via WSL, since the
+    codegen crate targets Linux x86_64 ELF unconditionally regardless of build host
   - macOS (Homebrew): `brew install llvm@17`
-  - Windows: install the LLVM 17.0.x release binary; point `LLVM_SYS_170_PREFIX` at it
-
-The codegen crate targets **Linux x86_64 ELF** unconditionally (cross-compilation is
-supported from Windows via `clang --target=x86_64-unknown-linux-gnu`).
+  - Windows (native): see `./scripts/setup_llvm17_windows.ps1`; the produced binary is still a
+    Linux ELF and needs WSL (or another Linux environment) to actually run
+- **Node.js** 18+ and npm — only for the VS Code extension (`editors/vscode`)
 
 ---
 
 ## Setup
 
 ```bash
-git clone https://github.com/D4R102004/hulk-compiler.git
-cd hulk-compiler
+git clone https://github.com/jccarmenate/hulk-ide.git
+cd hulk-ide
 cargo build --all
 ```
 
@@ -623,10 +701,18 @@ to the LLVM C API at the cost of pinning to a specific LLVM version (17).
 
 ---
 
-## Team
+## Origins & Team
+
+The compiler (everything in `crates/` except `hulk-lsp`) started as a joint undergraduate
+thesis for the Compilers course at Universidad de La Habana:
 
 | Name | GitHub |
 |------|--------|
 | Darío Francisco Alfonso Urrutia | [@D4R102004](https://github.com/D4R102004) |
 | Juan Carlos Carmenate Díaz | [@Juank404](https://github.com/JuanCMath) |
 | Sebastian González Alfonso | [@sebagonz106](https://github.com/sebagonz106) |
+
+This repository (`hulk-ide`) is a separate personal project by Juan Carlos Carmenate Díaz,
+reusing that compiler — with the team's permission — as the base for the language server and
+VS Code extension described in [HULK IDE](#hulk-ide-1). Dario and Sebastian are each building
+their own separate projects on the same base.
