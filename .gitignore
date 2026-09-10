@@ -34,3 +34,7 @@ output
 
 # Claude Code worktrees
 .claude/
+
+# Local WSL build-environment setup (LLVM 17 toolchain distro), not source
+.wsl-jammy/
+.wsl-import/
