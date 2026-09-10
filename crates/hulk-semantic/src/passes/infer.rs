@@ -15,10 +15,10 @@ use std::collections::{HashMap, HashSet};
 use hulk_ast::{
     AssignExpr, AssignTarget, AttributeDecl, BinaryExpr, BinaryOp, BlockExpr, CallExpr,
     Declaration, DeclarationKind, DowncastExpr, ElifBranch, Expr, ExprKind, ForExpr, FunctionDecl,
-    IfExpr, IndexExpr, LambdaExpr, LetBinding, LetExpr, Literal, MatchCase, MatchExpr, MemberExpr,
-    NewExpr, Pattern, Program, SourceSpan, TypeDecl, TypeMember, TypeMemberKind, TypeParent,
-    TypeRef, TypeTestExpr, UnaryExpr, UnaryOp, VectorComprehension, VectorExpr, VectorGenerator, 
-    WhileExpr, MacroArg, MacroDecl, MacroCallExpr, MacroMatchExpr
+    IfExpr, IndexExpr, LambdaExpr, LetBinding, LetExpr, Literal, MacroArg, MacroCallExpr,
+    MacroDecl, MacroMatchExpr, MatchCase, MatchExpr, MemberExpr, NewExpr, Pattern, Program,
+    SourceSpan, TypeDecl, TypeMember, TypeMemberKind, TypeParent, TypeRef, TypeTestExpr, UnaryExpr,
+    UnaryOp, VectorComprehension, VectorExpr, VectorGenerator, WhileExpr,
 };
 
 use crate::environment::Environment;
@@ -133,7 +133,7 @@ impl<'a> InferState<'a> {
                     typed_body,
                 );
                 Declaration::new(DeclarationKind::Macro(typed_macro), span)
-        }
+            }
         }
     }
 
@@ -953,11 +953,7 @@ impl<'a> InferState<'a> {
             };
 
             // 2c. Declare the binding in the current (new) scope.
-            env.declare(
-                &binding.name,
-                declared_type.clone(),
-                binding.name_span,
-            );
+            env.declare(&binding.name, declared_type.clone(), binding.name_span);
 
             // 2d. Store the typed binding.
             typed_bindings.push(LetBinding::new(
@@ -1587,11 +1583,10 @@ impl<'a> InferState<'a> {
         )
     }
 
-    
     /// Infers `new ElemType[size]` / `new ElemType[size]{ i -> expr }`.
-    /// 
+    ///
     /// The size expression must be a `Number`. The declared element type is resolved
-    /// from the `TypeRef`. If there's a generator, its body is type-checked against 
+    /// from the `TypeRef`. If there's a generator, its body is type-checked against
     /// the declared element type. The result type is `Vector<ElemType>`.
     fn infer_new_vector(
         &mut self,
@@ -1600,7 +1595,6 @@ impl<'a> InferState<'a> {
         span: SourceSpan,
         env: &mut Environment,
     ) -> TypedExpr {
-            
         // Infer the size expression normally — its type should be Number and will be checked later.
         let typed_size = self.infer_expr(size, env);
         self.constrain_if_variable(&typed_size, Type::Number);
@@ -1615,7 +1609,10 @@ impl<'a> InferState<'a> {
             env.push_scope();
             env.declare(&gen.var, Type::Number, size.span); // index variable
             let typed_body = self.infer_expr(&gen.body, env);
-            if !typed_body.anno.conforms_to(&declared_elem_ty, self.registry) {
+            if !typed_body
+                .anno
+                .conforms_to(&declared_elem_ty, self.registry)
+            {
                 self.errors.push(SemanticError::error(
                     SemanticErrorKind::NotConforming {
                         found: typed_body.anno.clone(),

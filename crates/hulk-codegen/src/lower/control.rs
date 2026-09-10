@@ -197,12 +197,22 @@ pub fn lower_while<'ctx>(
     let default_val: BasicValueEnum<'ctx> = match result_type {
         Type::Number => ctx.codegen.context.f64_type().const_float(0.0).into(),
         Type::Boolean => ctx.codegen.context.bool_type().const_int(0, false).into(),
-        Type::String | Type::Object | Type::Named(_) | Type::Vector(_) => {
-            ctx.codegen.context.ptr_type(Default::default()).const_null().into()
-        }
+        Type::String | Type::Object | Type::Named(_) | Type::Vector(_) => ctx
+            .codegen
+            .context
+            .ptr_type(Default::default())
+            .const_null()
+            .into(),
         Type::Iterable(_) | Type::Function { .. } => {
-            let ptr = ctx.codegen.context.ptr_type(Default::default()).const_null();
-            ctx.codegen.context.const_struct(&[ptr.into(), ptr.into()], false).into()
+            let ptr = ctx
+                .codegen
+                .context
+                .ptr_type(Default::default())
+                .const_null();
+            ctx.codegen
+                .context
+                .const_struct(&[ptr.into(), ptr.into()], false)
+                .into()
         }
         _ => {
             return Err(CodegenError::unsupported(
@@ -214,10 +224,14 @@ pub fn lower_while<'ctx>(
 
     // Push result_alloca as a GC root
     let result_shadow_slot = if utils::is_heap_allocated_type(result_type, ctx.registry) {
-        let push_fn = ctx.codegen.functions.get("hulk_rt_shadow_push")
+        let push_fn = ctx
+            .codegen
+            .functions
+            .get("hulk_rt_shadow_push")
             .cloned()
             .ok_or_else(|| CodegenError::unsupported("hulk_rt_shadow_push not declared", None))?;
-        ctx.codegen.builder
+        ctx.codegen
+            .builder
             .build_call(push_fn, &[result_alloca.into()], "while_result_shadow_push")
             .map_err(|e| CodegenError::llvm_verification(e.to_string()))?;
         true
@@ -284,12 +298,20 @@ pub fn lower_while<'ctx>(
 
     ctx.codegen.builder.position_at_end(exit_bb);
     if result_shadow_slot {
-        let pop_fn = ctx.codegen.functions.get("hulk_rt_shadow_pop").cloned().unwrap();
-        ctx.codegen.builder
+        let pop_fn = ctx
+            .codegen
+            .functions
+            .get("hulk_rt_shadow_pop")
+            .cloned()
+            .unwrap();
+        ctx.codegen
+            .builder
             .build_call(pop_fn, &[], "while_result_shadow_pop")
             .map_err(|e| CodegenError::llvm_verification(e.to_string()))?;
     }
-    let result = ctx.codegen.builder
+    let result = ctx
+        .codegen
+        .builder
         .build_load(result_ty, result_alloca, "while_result_load")
         .map_err(|e| CodegenError::llvm_verification(e.to_string()))?;
     Ok(result)

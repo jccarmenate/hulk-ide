@@ -5,7 +5,7 @@ use inkwell::values::BasicValueEnum;
 use super::lower_expr;
 use crate::error::CodegenError;
 use crate::lower::builtins::lookup_constant;
-use crate::lower::utils::{convert_to_protocol, is_heap_allocated_type, ensure_boxed};
+use crate::lower::utils::{convert_to_protocol, ensure_boxed, is_heap_allocated_type};
 use crate::lower::LowerCtx;
 
 /// Lowers a variable reference.

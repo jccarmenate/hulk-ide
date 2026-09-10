@@ -57,8 +57,11 @@ fn member_completions(verified: &VerifiedProgram, receiver: &str) -> Vec<Complet
     let mut items = Vec::new();
     if let Some(methods) = verified.registry.method_table_for(&ty) {
         for (name, sig) in methods {
-            let params: Vec<String> =
-                sig.params.iter().map(|(n, t)| format!("{n}: {t}")).collect();
+            let params: Vec<String> = sig
+                .params
+                .iter()
+                .map(|(n, t)| format!("{n}: {t}"))
+                .collect();
             items.push(CompletionItem {
                 label: name,
                 kind: Some(CompletionItemKind::METHOD),
@@ -107,8 +110,11 @@ fn general_completions(verified: &VerifiedProgram) -> Vec<CompletionItem> {
 
     for (name, sig) in &verified.registry.functions {
         if seen.insert(name.clone()) {
-            let params: Vec<String> =
-                sig.params.iter().map(|(n, t)| format!("{n}: {t}")).collect();
+            let params: Vec<String> = sig
+                .params
+                .iter()
+                .map(|(n, t)| format!("{n}: {t}"))
+                .collect();
             items.push(CompletionItem {
                 label: name.clone(),
                 kind: Some(CompletionItemKind::FUNCTION),
@@ -136,7 +142,9 @@ mod tests {
     use super::*;
 
     fn test_analyze(source: &str) -> VerifiedProgram {
-        let tokens = hulk_lexer::Lexer::new(source).tokenize().expect("valid tokens");
+        let tokens = hulk_lexer::Lexer::new(source)
+            .tokenize()
+            .expect("valid tokens");
         let mut program = hulk_parser::parse(tokens).expect("valid parse");
         hulk_transpile::expand_program(&mut program);
         hulk_semantic::analyze(&program).expect("valid program")
@@ -145,34 +153,73 @@ mod tests {
     #[test]
     fn receiver_before_dot_finds_the_identifier_right_before_the_cursor() {
         assert_eq!(
-            receiver_before_dot("obj.", Position { line: 0, character: 4 }),
+            receiver_before_dot(
+                "obj.",
+                Position {
+                    line: 0,
+                    character: 4
+                }
+            ),
             Some("obj".to_string())
         );
         assert_eq!(
-            receiver_before_dot("let x = obj.", Position { line: 0, character: 12 }),
+            receiver_before_dot(
+                "let x = obj.",
+                Position {
+                    line: 0,
+                    character: 12
+                }
+            ),
             Some("obj".to_string())
         );
     }
 
     #[test]
     fn receiver_before_dot_is_none_without_a_trailing_dot() {
-        assert_eq!(receiver_before_dot("obj", Position { line: 0, character: 3 }), None);
+        assert_eq!(
+            receiver_before_dot(
+                "obj",
+                Position {
+                    line: 0,
+                    character: 3
+                }
+            ),
+            None
+        );
     }
 
     #[test]
     fn completion_after_dot_suggests_methods_and_attributes() {
-        let source = "type A {\n    value: Number = 1;\n    f(): Number => 1;\n}\nlet a = new A() in\na;";
+        let source =
+            "type A {\n    value: Number = 1;\n    f(): Number => 1;\n}\nlet a = new A() in\na;";
         let verified = test_analyze(source);
-        let items = completion_items(&verified, "a.", Position { line: 0, character: 2 });
+        let items = completion_items(
+            &verified,
+            "a.",
+            Position {
+                line: 0,
+                character: 2,
+            },
+        );
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         assert!(labels.contains(&"f"), "expected method `f` in {labels:?}");
-        assert!(labels.contains(&"value"), "expected attribute `value` in {labels:?}");
+        assert!(
+            labels.contains(&"value"),
+            "expected attribute `value` in {labels:?}"
+        );
     }
 
     #[test]
     fn completion_without_a_dot_suggests_bound_names_and_globals() {
         let verified = test_analyze("let x = 5 in\nx + 1;");
-        let items = completion_items(&verified, "x", Position { line: 1, character: 0 });
+        let items = completion_items(
+            &verified,
+            "x",
+            Position {
+                line: 1,
+                character: 0,
+            },
+        );
         let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
         assert!(labels.contains(&"x"));
         assert!(labels.contains(&"print"));

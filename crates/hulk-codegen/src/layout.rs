@@ -16,7 +16,7 @@ use hulk_semantic::{topological_order, TypeInfo, TypeRegistry};
 
 use crate::context::CodegenCtx;
 use crate::error::CodegenError;
-use crate::lower::utils::{llvm_type, is_heap_allocated_type, HEADER_FIELD_COUNT};
+use crate::lower::utils::{is_heap_allocated_type, llvm_type, HEADER_FIELD_COUNT};
 
 const METHOD_HEADER_SLOTS: usize = 2;
 
@@ -109,7 +109,9 @@ pub fn build_layouts(
         };
         for (idx, method_name) in methods.keys().enumerate() {
             // Method dispatch indices are METHOD_HEADER_SLOTS-based
-            layout.method_slots.insert(method_name.clone(), idx + METHOD_HEADER_SLOTS);
+            layout
+                .method_slots
+                .insert(method_name.clone(), idx + METHOD_HEADER_SLOTS);
         }
 
         layouts.insert(type_name.clone(), layout);
@@ -279,7 +281,7 @@ pub fn build_vtables<'ctx>(
         };
 
         // ── Slot 0: pointer to the GC field map ──────────────────────────
-        // Mark phase dereferences vtable[0] for pointer-field offsets and object size. 
+        // Mark phase dereferences vtable[0] for pointer-field offsets and object size.
         // Must come before build_gc_field_maps is called.
         let field_map_ptr = ctx
             .type_layouts
@@ -424,7 +426,7 @@ pub fn build_gc_field_maps<'ctx>(
         };
 
         // ── Build the constant array: [size, offsets…, -1] ───────────────
-        // field_map[0] is the object size so hulk_rt_release can find the 
+        // field_map[0] is the object size so hulk_rt_release can find the
         // deallocation Layout for TAG_OBJECT without a separate vtable slot.
         // The mark phase skips field_map[0] and reads from index 1.
         let mut values: Vec<inkwell::values::IntValue<'ctx>> =

@@ -1,10 +1,10 @@
 //! Shared helper functions and constants used by multiple lowering submodules.
 
-use inkwell::FloatPredicate;
-use inkwell::values::BasicValueEnum;
-use hulk_ast::{TypeRef, SourceSpan};
+use hulk_ast::{SourceSpan, TypeRef};
+pub use hulk_rt::{BOX_HEADER_SIZE, HEADER_FIELD_COUNT, TAG_BOOLEAN, TAG_BOX, TAG_NUMBER};
 use hulk_semantic::{Type, TypeRegistry};
-pub use hulk_rt::{TAG_BOOLEAN, TAG_BOX, TAG_NUMBER, HEADER_FIELD_COUNT, BOX_HEADER_SIZE};
+use inkwell::values::BasicValueEnum;
+use inkwell::FloatPredicate;
 
 use crate::error::CodegenError;
 use crate::lower::LowerCtx;
@@ -172,7 +172,12 @@ pub fn resolve_attribute_with_offset(
 pub fn is_heap_allocated_type(ty: &Type, _registry: &TypeRegistry) -> bool {
     matches!(
         ty,
-        Type::String | Type::Object | Type::Vector(_) | Type::Iterable(_) | Type::Named(_) | Type::Function { .. },
+        Type::String
+            | Type::Object
+            | Type::Vector(_)
+            | Type::Iterable(_)
+            | Type::Named(_)
+            | Type::Function { .. },
     )
 }
 
@@ -185,7 +190,8 @@ pub fn is_heap_allocated_type(ty: &Type, _registry: &TypeRegistry) -> bool {
 /// whole struct — passing the struct directly fails LLVM module
 /// verification with a parameter-type mismatch.
 pub fn is_fat_pointer_type(ty: &Type, registry: &TypeRegistry) -> bool {
-    matches!(ty, Type::Function { .. } | Type::Iterable(_)) || matches!(ty, Type::Named(_) if registry.is_protocol(ty))
+    matches!(ty, Type::Function { .. } | Type::Iterable(_))
+        || matches!(ty, Type::Named(_) if registry.is_protocol(ty))
 }
 
 /// Converts a concrete object pointer to a protocol fat pointer.
@@ -474,14 +480,14 @@ pub fn ensure_boxed<'ctx>(
 
 /// Converts a boxed primitive pointer back to a raw value.
 /// If `ty` is not Number or Boolean, returns the pointer unchanged.
-/// 
+///
 /// # Errors
 /// Returns `CodegenError::Internal` for LLVM builder failures.
 pub fn ensure_unboxed<'ctx>(
     ctx: &mut LowerCtx<'_, 'ctx>,
     boxed_ptr: inkwell::values::BasicValueEnum<'ctx>,
     ty: &Type,
-    span: Option<SourceSpan>
+    span: Option<SourceSpan>,
 ) -> Result<inkwell::values::BasicValueEnum<'ctx>, CodegenError> {
     // If the static type is already a pointer type, no unboxing needed.
     if !matches!(ty, Type::Number | Type::Boolean) ||
@@ -493,18 +499,26 @@ pub fn ensure_unboxed<'ctx>(
 
     let ptr = boxed_ptr.into_pointer_value();
 
-    let current_block = ctx
-        .codegen
-        .builder
-        .get_insert_block()
-        .ok_or_else(|| CodegenError::internal("no active insertion block while unboxing", span))?;
+    let current_block =
+        ctx.codegen.builder.get_insert_block().ok_or_else(|| {
+            CodegenError::internal("no active insertion block while unboxing", span)
+        })?;
     let parent_fn = current_block
         .get_parent()
         .ok_or_else(|| CodegenError::internal("unboxing outside of a function", span))?;
 
-    let null_bb = ctx.codegen.context.append_basic_block(parent_fn, "unbox_null");
-    let cont_bb = ctx.codegen.context.append_basic_block(parent_fn, "unbox_cont");
-    let merge_bb = ctx.codegen.context.append_basic_block(parent_fn, "unbox_merge");
+    let null_bb = ctx
+        .codegen
+        .context
+        .append_basic_block(parent_fn, "unbox_null");
+    let cont_bb = ctx
+        .codegen
+        .context
+        .append_basic_block(parent_fn, "unbox_cont");
+    let merge_bb = ctx
+        .codegen
+        .context
+        .append_basic_block(parent_fn, "unbox_merge");
 
     let result_ty: inkwell::types::BasicTypeEnum<'ctx> = match ty {
         Type::Number => ctx.codegen.context.f64_type().into(),
@@ -608,7 +622,8 @@ pub fn ensure_unboxed<'ctx>(
         .map_err(|e| CodegenError::llvm_verification(e.to_string()))?;
 
     ctx.codegen.builder.position_at_end(merge_bb);
-    let result = ctx.codegen
+    let result = ctx
+        .codegen
         .builder
         .build_load(result_ty, result_alloca, "unbox_result_load")
         .map_err(|e| CodegenError::llvm_verification(e.to_string()))?;

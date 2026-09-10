@@ -1,7 +1,7 @@
 //! Compilation options threaded through `hulk_codegen::compile`.
 
-use std::path::PathBuf;
 use inkwell::OptimizationLevel as InkwellOpt;
+use std::path::PathBuf;
 
 /// Optimization level requested for the generated module.
 ///
@@ -32,7 +32,7 @@ impl OptLevel {
 
     /// Returns the `run_passes` pipeline string for the new pass manager.
     ///
-    /// `None` returns `None` (skip `run_passes` entirely), rather than an empty 
+    /// `None` returns `None` (skip `run_passes` entirely), rather than an empty
     /// string (which would still invoke the pass manager machinery with no passes).
     pub fn pipeline_str(self) -> Option<&'static str> {
         match self {

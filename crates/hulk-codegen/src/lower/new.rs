@@ -6,7 +6,7 @@ use hulk_semantic::{Type, TypeRegistry};
 
 use super::lower_expr;
 use crate::error::CodegenError;
-use crate::lower::utils::{field_indices, ensure_boxed};
+use crate::lower::utils::{ensure_boxed, field_indices};
 use crate::lower::LowerCtx;
 
 /// Lowers a `new T(args)` expression.
@@ -88,7 +88,7 @@ pub fn lower_new<'ctx>(
     let i64_type = ctx.codegen.context.i64_type();
     let i1_type = ctx.codegen.context.bool_type();
     let i8_type = ctx.codegen.context.i8_type(); // for type_tag
-    // let ptr_type = ctx.codegen.context.ptr_type(Default::default());
+                                                 // let ptr_type = ctx.codegen.context.ptr_type(Default::default());
 
     // Helper: GEP into the struct at field index `field_idx` (0‑based).
     let gep_field = |field_idx: u32| -> Result<inkwell::values::PointerValue, _> {

@@ -98,7 +98,6 @@ pub enum TokenKind {
     /// `$` sigil for macro variable placeholder parameters.
     Dollar,
 
-
     // ── Extra feature: pattern matching ───────────────────────────────
     Match,
     Case,
@@ -719,8 +718,14 @@ mod tests {
     fn test_tokenize_recovering_reports_multiple_lexical_errors() {
         let (tokens, errors) = Lexer::new("# + ?").tokenize_recovering();
         assert_eq!(errors.len(), 2);
-        assert!(matches!(errors[0], LexError::UnexpectedChar { ch: '#', .. }));
-        assert!(matches!(errors[1], LexError::UnexpectedChar { ch: '?', .. }));
+        assert!(matches!(
+            errors[0],
+            LexError::UnexpectedChar { ch: '#', .. }
+        ));
+        assert!(matches!(
+            errors[1],
+            LexError::UnexpectedChar { ch: '?', .. }
+        ));
         assert!(tokens.iter().any(|t| matches!(t.kind, TokenKind::Plus)));
     }
 

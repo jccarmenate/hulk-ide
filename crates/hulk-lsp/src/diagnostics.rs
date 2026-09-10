@@ -44,13 +44,25 @@ pub fn compute_diagnostics(text: &str) -> DiagnosticsOutcome {
     let had_recovered_errors = !parse_errors.is_empty();
     let mut diagnostics: Vec<Diagnostic> = parse_errors
         .iter()
-        .map(|err| diagnostic(err.span.line, err.span.col, DiagnosticSeverity::ERROR, err.to_string()))
+        .map(|err| {
+            diagnostic(
+                err.span.line,
+                err.span.col,
+                DiagnosticSeverity::ERROR,
+                err.to_string(),
+            )
+        })
         .collect();
 
     let macro_errors = hulk_transpile::expand_program(&mut program);
     let had_recovered_errors = had_recovered_errors || !macro_errors.is_empty();
     diagnostics.extend(macro_errors.iter().map(|err| {
-        diagnostic(err.span.line, err.span.col, DiagnosticSeverity::ERROR, err.kind.to_string())
+        diagnostic(
+            err.span.line,
+            err.span.col,
+            DiagnosticSeverity::ERROR,
+            err.kind.to_string(),
+        )
     }));
 
     let last_good = match hulk_semantic::analyze(&program) {
@@ -110,7 +122,12 @@ fn semantic_diagnostic(err: &SemanticError, severity: DiagnosticSeverity) -> Dia
     diagnostic(err.span.line, err.span.col, severity, err.kind.to_string())
 }
 
-fn diagnostic(line: usize, col: usize, severity: DiagnosticSeverity, message: String) -> Diagnostic {
+fn diagnostic(
+    line: usize,
+    col: usize,
+    severity: DiagnosticSeverity,
+    message: String,
+) -> Diagnostic {
     Diagnostic {
         range: span_to_range(line, col),
         severity: Some(severity),
@@ -147,7 +164,10 @@ mod tests {
     #[test]
     fn valid_program_has_no_diagnostics() {
         let diagnostics = compute_diagnostics_only("print(1 + 2);");
-        assert!(diagnostics.is_empty(), "unexpected diagnostics: {diagnostics:?}");
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
     }
 
     #[test]
@@ -159,8 +179,14 @@ mod tests {
         assert_eq!(
             diagnostics[0].range,
             Range {
-                start: Position { line: 0, character: 0 },
-                end: Position { line: 0, character: 1 },
+                start: Position {
+                    line: 0,
+                    character: 0
+                },
+                end: Position {
+                    line: 0,
+                    character: 1
+                },
             }
         );
     }
@@ -185,9 +211,15 @@ mod tests {
             2,
             "expected both undefined variables to be reported: {diagnostics:?}"
         );
-        assert!(diagnostics.iter().all(|d| d.severity == Some(DiagnosticSeverity::ERROR)));
-        assert!(diagnostics.iter().any(|d| d.message.contains("undefined variable `a`")));
-        assert!(diagnostics.iter().any(|d| d.message.contains("undefined variable `b`")));
+        assert!(diagnostics
+            .iter()
+            .all(|d| d.severity == Some(DiagnosticSeverity::ERROR)));
+        assert!(diagnostics
+            .iter()
+            .any(|d| d.message.contains("undefined variable `a`")));
+        assert!(diagnostics
+            .iter()
+            .any(|d| d.message.contains("undefined variable `b`")));
     }
 
     #[test]
@@ -201,7 +233,11 @@ mod tests {
             print(classify(1));
         "#;
         let diagnostics = compute_diagnostics_only(source);
-        assert_eq!(diagnostics.len(), 1, "expected exactly one warning: {diagnostics:?}");
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "expected exactly one warning: {diagnostics:?}"
+        );
         assert_eq!(diagnostics[0].severity, Some(DiagnosticSeverity::WARNING));
         assert!(diagnostics[0].message.contains("non-exhaustive match"));
     }
@@ -223,7 +259,10 @@ mod tests {
         // meaningful "last good" state — caching it would silently erase
         // whatever real, valid code was cached from before this edit.
         let outcome = compute_diagnostics("function f(): Number => 1;\n)");
-        assert!(!outcome.diagnostics.is_empty(), "expected a parse error diagnostic");
+        assert!(
+            !outcome.diagnostics.is_empty(),
+            "expected a parse error diagnostic"
+        );
         assert!(outcome.last_good.is_none());
     }
 }

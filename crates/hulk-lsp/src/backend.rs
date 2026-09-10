@@ -124,7 +124,13 @@ fn update_text(documents: &mut HashMap<Url, DocumentState>, uri: Url, text: Stri
     match documents.get_mut(&uri) {
         Some(state) => state.text = text,
         None => {
-            documents.insert(uri, DocumentState { text, last_good: None });
+            documents.insert(
+                uri,
+                DocumentState {
+                    text,
+                    last_good: None,
+                },
+            );
         }
     }
 }
@@ -156,7 +162,9 @@ impl Backend {
             }
         }
 
-        self.client.publish_diagnostics(uri, outcome.diagnostics, None).await;
+        self.client
+            .publish_diagnostics(uri, outcome.diagnostics, None)
+            .await;
     }
 }
 
@@ -196,7 +204,11 @@ impl LanguageServer for Backend {
         let Some(change) = params.content_changes.pop() else {
             return;
         };
-        update_text(&mut self.documents.write().unwrap(), uri.clone(), change.text);
+        update_text(
+            &mut self.documents.write().unwrap(),
+            uri.clone(),
+            change.text,
+        );
         self.publish_for(uri).await;
     }
 
@@ -284,7 +296,10 @@ mod tests {
 
         let state = documents.get(&uri).expect("document still tracked");
         assert_eq!(state.text, "print(1");
-        assert!(state.last_good.is_some(), "last_good should survive a text update");
+        assert!(
+            state.last_good.is_some(),
+            "last_good should survive a text update"
+        );
     }
 
     #[test]
@@ -295,7 +310,9 @@ mod tests {
     }
 
     fn test_analyze(source: &str) -> hulk_semantic::VerifiedProgram {
-        let tokens = hulk_lexer::Lexer::new(source).tokenize().expect("valid tokens");
+        let tokens = hulk_lexer::Lexer::new(source)
+            .tokenize()
+            .expect("valid tokens");
         let mut program = hulk_parser::parse(tokens).expect("valid parse");
         hulk_transpile::expand_program(&mut program);
         hulk_semantic::analyze(&program).expect("valid program")
@@ -304,7 +321,14 @@ mod tests {
     #[test]
     fn hover_response_shows_the_resolved_type() {
         let verified = test_analyze("let x = 5 in\nx + 1;");
-        let hover = hover_response(&verified, Position { line: 1, character: 0 }).expect("hover");
+        let hover = hover_response(
+            &verified,
+            Position {
+                line: 1,
+                character: 0,
+            },
+        )
+        .expect("hover");
         match hover.contents {
             HoverContents::Markup(markup) => assert!(markup.value.contains("x: Number")),
             other => panic!("expected markup hover, got {other:?}"),
@@ -314,18 +338,38 @@ mod tests {
     #[test]
     fn hover_response_is_none_over_a_literal() {
         let verified = test_analyze("print(1);");
-        assert!(hover_response(&verified, Position { line: 0, character: 6 }).is_none());
+        assert!(hover_response(
+            &verified,
+            Position {
+                line: 0,
+                character: 6
+            }
+        )
+        .is_none());
     }
 
     #[test]
     fn definition_response_finds_a_let_binding() {
         let verified = test_analyze("let x = 5 in\nx + 1;");
         let uri = Url::parse("file:///t.hulk").unwrap();
-        let response = definition_response(&verified, &uri, Position { line: 1, character: 0 })
-            .expect("response");
+        let response = definition_response(
+            &verified,
+            &uri,
+            Position {
+                line: 1,
+                character: 0,
+            },
+        )
+        .expect("response");
         match response {
             GotoDefinitionResponse::Scalar(location) => {
-                assert_eq!(location.range.start, Position { line: 0, character: 4 });
+                assert_eq!(
+                    location.range.start,
+                    Position {
+                        line: 0,
+                        character: 4
+                    }
+                );
             }
             other => panic!("expected scalar response, got {other:?}"),
         }
@@ -335,8 +379,15 @@ mod tests {
     fn definition_response_finds_a_method_via_the_type_registry() {
         let verified = test_analyze("type A {\n    b(): Number => 1;\n}\nnew A().b();");
         let uri = Url::parse("file:///t.hulk").unwrap();
-        let response = definition_response(&verified, &uri, Position { line: 3, character: 8 })
-            .expect("response");
+        let response = definition_response(
+            &verified,
+            &uri,
+            Position {
+                line: 3,
+                character: 8,
+            },
+        )
+        .expect("response");
         match response {
             GotoDefinitionResponse::Scalar(location) => {
                 assert_eq!(location.range.start.line, 1);
@@ -349,8 +400,14 @@ mod tests {
     fn definition_response_is_none_over_a_literal() {
         let verified = test_analyze("print(1);");
         let uri = Url::parse("file:///t.hulk").unwrap();
-        assert!(
-            definition_response(&verified, &uri, Position { line: 0, character: 6 }).is_none()
-        );
+        assert!(definition_response(
+            &verified,
+            &uri,
+            Position {
+                line: 0,
+                character: 6
+            }
+        )
+        .is_none());
     }
 }

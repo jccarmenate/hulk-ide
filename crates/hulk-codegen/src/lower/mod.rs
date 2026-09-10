@@ -113,7 +113,7 @@ impl<'a, 'ctx> LowerCtx<'a, 'ctx> {
         // ── 1. Release owned heap-allocated bindings ──────────────────────
         let release_fn = self.codegen.functions.get("hulk_rt_release").cloned();
         if let Some(release) = release_fn {
-            for (_name, (ptr, llvm_ty, sem_ty, owned)) in &scope {
+            for (ptr, llvm_ty, sem_ty, owned) in scope.values() {
                 if *owned && is_heap_allocated_type(sem_ty, self.registry) {
                     // Load the full value using its stored LLVM type.
                     let val = self
@@ -151,7 +151,7 @@ impl<'a, 'ctx> LowerCtx<'a, 'ctx> {
 
         Ok(())
     }
-    
+
     /// Declares an owned variable in the current scope and initialises it.
     ///
     /// If the variable is pointer-typed (heap-allocated), the alloca's address
@@ -327,15 +327,15 @@ pub fn lower_expr<'ctx>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{OptLevel, itables, layout, lower, runtime_decls};
+    use crate::{itables, layout, lower, runtime_decls, OptLevel};
+    use hulk_ast::{
+        AssignExpr, AssignTarget, BinaryExpr, BinaryOp, BlockExpr, ElifBranch, Expr, ExprKind,
+        ForExpr, IfExpr, IndexExpr, LetBinding, LetExpr, Literal, MatchCase, MatchExpr, Pattern,
+        SourceSpan, TypeRef, UnaryExpr, UnaryOp, VectorComprehension, VectorExpr, WhileExpr,
+    };
     use hulk_lexer::Lexer;
     use hulk_parser::parse;
     use hulk_semantic::analyze;
-    use hulk_ast::{
-        AssignExpr, AssignTarget, BinaryExpr, BinaryOp, BlockExpr, ElifBranch, Expr, ExprKind,
-        IfExpr, IndexExpr, LetBinding, LetExpr, Literal, SourceSpan, UnaryExpr, UnaryOp, WhileExpr, ForExpr,
-        MatchExpr, MatchCase, Pattern, VectorExpr, VectorComprehension, TypeRef,
-    };
     use hulk_semantic::{seeded_registry, Type};
     use inkwell::context::Context;
 
@@ -1333,8 +1333,15 @@ mod tests {
     #[test]
     fn test_vector_index_primitive_null_check() {
         // let xs = [1,2,3] in xs[0]
-        let xs = vector_lit(vec![num(1.0), num(2.0), num(3.0)], Type::Vector(Box::new(Type::Number)));
-        let body = index_expr(var("xs", Type::Vector(Box::new(Type::Number))), num(0.0), Type::Number);
+        let xs = vector_lit(
+            vec![num(1.0), num(2.0), num(3.0)],
+            Type::Vector(Box::new(Type::Number)),
+        );
+        let body = index_expr(
+            var("xs", Type::Vector(Box::new(Type::Number))),
+            num(0.0),
+            Type::Number,
+        );
         let expr = let_expr(vec![("xs".to_string(), xs)], body, Type::Number);
         let ir = lower_expr_to_ir(expr);
         assert_ir_contains(&ir, "call ptr @hulk_rt_vector_get(ptr");

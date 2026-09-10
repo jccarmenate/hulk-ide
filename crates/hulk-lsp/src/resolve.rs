@@ -566,7 +566,9 @@ mod tests {
     use super::*;
 
     fn analyze_source(source: &str) -> hulk_semantic::VerifiedProgram {
-        let tokens = hulk_lexer::Lexer::new(source).tokenize().expect("valid tokens");
+        let tokens = hulk_lexer::Lexer::new(source)
+            .tokenize()
+            .expect("valid tokens");
         let mut program = hulk_parser::parse(tokens).expect("valid parse");
         hulk_transpile::expand_program(&mut program);
         hulk_semantic::analyze(&program).expect("valid program")
@@ -575,8 +577,14 @@ mod tests {
     #[test]
     fn resolves_a_let_bound_variable_to_its_declaration_and_type() {
         let verified = analyze_source("let x = 5 in\nx + 1;");
-        let hit = resolve_at(&verified.typed_program, Position { line: 1, character: 0 })
-            .expect("hit");
+        let hit = resolve_at(
+            &verified.typed_program,
+            Position {
+                line: 1,
+                character: 0,
+            },
+        )
+        .expect("hit");
         assert_eq!(hit.name, "x");
         assert_eq!(hit.ty, Type::Number);
         assert_eq!(hit.definition, Some(SourceSpan::new(1, 5)));
@@ -584,10 +592,15 @@ mod tests {
 
     #[test]
     fn resolves_a_function_parameter_to_its_declaration_and_type() {
-        let verified =
-            analyze_source("function f(x: Number): Number =>\n    x;\nprint(f(1));");
-        let hit = resolve_at(&verified.typed_program, Position { line: 1, character: 4 })
-            .expect("hit");
+        let verified = analyze_source("function f(x: Number): Number =>\n    x;\nprint(f(1));");
+        let hit = resolve_at(
+            &verified.typed_program,
+            Position {
+                line: 1,
+                character: 4,
+            },
+        )
+        .expect("hit");
         assert_eq!(hit.name, "x");
         assert_eq!(hit.ty, Type::Number);
         assert_eq!(hit.definition, Some(SourceSpan::new(1, 12)));
@@ -596,18 +609,29 @@ mod tests {
     #[test]
     fn resolves_a_for_loop_variable_to_its_declaration() {
         let verified = analyze_source("for (x in range(1, 10))\n    print(x);");
-        let hit = resolve_at(&verified.typed_program, Position { line: 1, character: 10 })
-            .expect("hit");
+        let hit = resolve_at(
+            &verified.typed_program,
+            Position {
+                line: 1,
+                character: 10,
+            },
+        )
+        .expect("hit");
         assert_eq!(hit.name, "x");
         assert_eq!(hit.definition, Some(SourceSpan::new(1, 6)));
     }
 
     #[test]
     fn resolves_self_inside_a_method_to_the_enclosing_type() {
-        let verified =
-            analyze_source("type A {\n    f(): A => self;\n}\nprint(new A().f());");
-        let hit = resolve_at(&verified.typed_program, Position { line: 1, character: 14 })
-            .expect("hit");
+        let verified = analyze_source("type A {\n    f(): A => self;\n}\nprint(new A().f());");
+        let hit = resolve_at(
+            &verified.typed_program,
+            Position {
+                line: 1,
+                character: 14,
+            },
+        )
+        .expect("hit");
         assert_eq!(hit.name, "self");
         assert_eq!(hit.ty, Type::Named("A".to_string()));
     }
@@ -615,8 +639,14 @@ mod tests {
     #[test]
     fn resolves_a_member_access_by_its_member_span() {
         let verified = analyze_source("type A {\n    b(): Number => 1;\n}\nnew A().b();");
-        let hit = resolve_at(&verified.typed_program, Position { line: 3, character: 8 })
-            .expect("hit");
+        let hit = resolve_at(
+            &verified.typed_program,
+            Position {
+                line: 3,
+                character: 8,
+            },
+        )
+        .expect("hit");
         assert_eq!(hit.name, "b");
         assert!(hit.receiver_type.is_some());
     }
@@ -624,8 +654,14 @@ mod tests {
     #[test]
     fn returns_none_over_a_literal() {
         let verified = analyze_source("print(1);");
-        assert!(resolve_at(&verified.typed_program, Position { line: 0, character: 6 })
-            .is_none());
+        assert!(resolve_at(
+            &verified.typed_program,
+            Position {
+                line: 0,
+                character: 6
+            }
+        )
+        .is_none());
     }
 
     #[test]

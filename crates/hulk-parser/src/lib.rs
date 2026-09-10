@@ -18,11 +18,11 @@ use std::fmt;
 use hulk_ast::{
     AssignExpr, AssignTarget, AttributeDecl, BinaryOp, BlockExpr, Declaration, DeclarationKind,
     DowncastExpr, ElifBranch, Expr, ExprKind, ForExpr, FunctionDecl, IfExpr, IndexExpr, LambdaExpr,
-    LetBinding, LetExpr, Literal, MatchCase, MatchExpr, MemberExpr, NewExpr, Param, Pattern,
-    Program, ProtocolDecl, ProtocolMethod, SourceSpan, TypeDecl, TypeMember, TypeMemberKind,
-    TypeParent, TypeRef, TypeTestExpr, UnaryOp, VectorComprehension, VectorExpr, VectorGenerator, 
-    WhileExpr, MacroArg, MacroCallExpr, MacroDecl, MacroParam, MacroParamKind, MacroCase, MacroMatchExpr,
-    MacroPattern, MacroPatternBind,
+    LetBinding, LetExpr, Literal, MacroArg, MacroCallExpr, MacroCase, MacroDecl, MacroMatchExpr,
+    MacroParam, MacroParamKind, MacroPattern, MacroPatternBind, MatchCase, MatchExpr, MemberExpr,
+    NewExpr, Param, Pattern, Program, ProtocolDecl, ProtocolMethod, SourceSpan, TypeDecl,
+    TypeMember, TypeMemberKind, TypeParent, TypeRef, TypeTestExpr, UnaryOp, VectorComprehension,
+    VectorExpr, VectorGenerator, WhileExpr,
 };
 use hulk_lexer::{Span, Token, TokenKind};
 
@@ -130,7 +130,11 @@ impl Ll1Parser {
             });
         }
 
-        Self { tokens, current: 0, in_macro_body: false }
+        Self {
+            tokens,
+            current: 0,
+            in_macro_body: false,
+        }
     }
 
     /// Parses a full HULK program: zero or more declarations followed by the
@@ -305,9 +309,7 @@ impl Ll1Parser {
             self.parse_block_expression()?
         } else {
             return Err(ParseError::new(
-                ParseErrorKind::Message(
-                    "expected `=>`, `->`, or `{` for macro body".to_string(),
-                ),
+                ParseErrorKind::Message("expected `=>`, `->`, or `{` for macro body".to_string()),
                 self.peek_span(),
             ));
         };
@@ -365,7 +367,11 @@ impl Ll1Parser {
             None
         };
 
-        Ok(MacroParam { kind: kind_prefix, name, type_annotation })
+        Ok(MacroParam {
+            kind: kind_prefix,
+            name,
+            type_annotation,
+        })
     }
 
     fn parse_type_declaration_after_keyword(&mut self) -> Result<TypeDecl, ParseError> {
@@ -901,9 +907,9 @@ impl Ll1Parser {
                         .map(|a| match a {
                             MacroArg::Expr(e) => Ok(e),
                             _ => Err(ParseError::new(
-                                ParseErrorKind::Message(format!(
-                                    "Macro specific argument used outside a macro call"
-                                )),
+                                ParseErrorKind::Message(
+                                    "Macro specific argument used outside a macro call".to_string(),
+                                ),
                                 span,
                             )),
                         })
@@ -991,7 +997,7 @@ impl Ll1Parser {
             TokenKind::False => Ok(Expr::boolean(false, span)),
             TokenKind::Ident(name) => Ok(Expr::variable(name, span)),
             TokenKind::SelfKw => Ok(Expr::new(ExprKind::SelfRef, span)),
-            // `base` is a symbol, not a keyword — it can be shadowed by a variable 
+            // `base` is a symbol, not a keyword — it can be shadowed by a variable
             // (like `let base: Printer = ...`). Emit Variable("base") here;
             // parse_postfix promotes it to BaseRef only when immediately followed by `(`
             // (the method-delegation call site).
@@ -1074,10 +1080,7 @@ impl Ll1Parser {
         // ── Empty block `{}` ──────────────────────────────────────────────
         if self.check(&TokenKind::RBrace) {
             self.advance();
-            return Ok(Expr::new(
-                ExprKind::Block(BlockExpr::new(Vec::new())),
-                span,
-            ));
+            return Ok(Expr::new(ExprKind::Block(BlockExpr::new(Vec::new())), span));
         }
 
         // ── Parse the first expression (mandatory) ──────────────────────
@@ -1182,7 +1185,12 @@ impl Ll1Parser {
 
             self.consume(&TokenKind::Assign, "`=` in let binding")?;
             let initializer = self.parse_expression()?;
-            bindings.push(LetBinding::new(name, type_annotation, initializer, name_span));
+            bindings.push(LetBinding::new(
+                name,
+                type_annotation,
+                initializer,
+                name_span,
+            ));
 
             if !self.match_kind(&TokenKind::Comma) {
                 break;
@@ -1567,8 +1575,16 @@ impl Ll1Parser {
             let right = self.parse_macro_pattern_factor()?;
             left = MacroPattern::BinaryExpr {
                 op,
-                left: Box::new(MacroPatternBind { name: None, ty: None, pattern: left }),
-                right: Box::new(MacroPatternBind { name: None, ty: None, pattern: right }),
+                left: Box::new(MacroPatternBind {
+                    name: None,
+                    ty: None,
+                    pattern: left,
+                }),
+                right: Box::new(MacroPatternBind {
+                    name: None,
+                    ty: None,
+                    pattern: right,
+                }),
             };
         }
         Ok(left)
@@ -1670,7 +1686,7 @@ impl Ll1Parser {
             TokenKind::True => Ok(MacroPattern::Literal(Literal::Boolean(true))),
             TokenKind::False => Ok(MacroPattern::Literal(Literal::Boolean(false))),
             TokenKind::Underscore => Ok(MacroPattern::Wildcard),
-            
+
             TokenKind::Ident(name) => {
                 // Check for a colon after the identifier
                 if self.match_kind(&TokenKind::Colon) {
@@ -1709,7 +1725,10 @@ impl Ll1Parser {
             }
 
             other => Err(ParseError::new(
-                ParseErrorKind::Message(format!("unexpected token in macro pattern: {}", token_kind_name(&other))),
+                ParseErrorKind::Message(format!(
+                    "unexpected token in macro pattern: {}",
+                    token_kind_name(&other)
+                )),
                 span,
             )),
         }
@@ -2316,7 +2335,10 @@ mod tests {
                 assert_eq!(macro_decl.params.len(), 1);
                 assert_eq!(macro_decl.params[0].name, "x");
                 assert_eq!(
-                    macro_decl.params[0].type_annotation.as_ref().map(ToString::to_string),
+                    macro_decl.params[0]
+                        .type_annotation
+                        .as_ref()
+                        .map(ToString::to_string),
                     Some("Number".to_string())
                 );
                 assert_eq!(
@@ -2327,7 +2349,10 @@ mod tests {
                     ExprKind::Binary(bin) => {
                         assert_eq!(bin.op, BinaryOp::Multiply);
                         assert!(matches!(&bin.left.kind, ExprKind::Variable(name) if name == "x"));
-                        assert!(matches!(&bin.right.kind, ExprKind::Literal(Literal::Number(2.0))));
+                        assert!(matches!(
+                            &bin.right.kind,
+                            ExprKind::Literal(Literal::Number(2.0))
+                        ));
                     }
                     _ => panic!("macro body is not a binary multiplication"),
                 }
@@ -2341,9 +2366,14 @@ mod tests {
                 assert_eq!(call.args.len(), 1);
                 match &call.args[0].kind {
                     ExprKind::Call(inner) => {
-                        assert!(matches!(&inner.callee.kind, ExprKind::Variable(name) if name == "twice"));
+                        assert!(
+                            matches!(&inner.callee.kind, ExprKind::Variable(name) if name == "twice")
+                        );
                         assert_eq!(inner.args.len(), 1);
-                        assert!(matches!(&inner.args[0].kind, ExprKind::Literal(Literal::Number(21.0))));
+                        assert!(matches!(
+                            &inner.args[0].kind,
+                            ExprKind::Literal(Literal::Number(21.0))
+                        ));
                     }
                     _ => panic!("argument is not a call"),
                 }
@@ -2368,7 +2398,10 @@ mod tests {
                 assert_eq!(m.params[1].kind, MacroParamKind::BodyExpr);
                 assert_eq!(m.params[1].name, "expr");
                 assert_eq!(
-                    m.params[1].type_annotation.as_ref().map(ToString::to_string),
+                    m.params[1]
+                        .type_annotation
+                        .as_ref()
+                        .map(ToString::to_string),
                     Some("Object".to_string())
                 );
                 assert_eq!(
@@ -2408,11 +2441,16 @@ mod tests {
                                 assert_eq!(let_expr.bindings[0].name, "temp");
                                 // The type annotation should be Object
                                 assert_eq!(
-                                    let_expr.bindings[0].type_annotation.as_ref().map(ToString::to_string),
+                                    let_expr.bindings[0]
+                                        .type_annotation
+                                        .as_ref()
+                                        .map(ToString::to_string),
                                     Some("Object".to_string())
                                 );
                                 // The initializer is a variable "a"
-                                assert!(matches!(&let_expr.bindings[0].initializer.kind, ExprKind::Variable(name) if name == "a"));
+                                assert!(
+                                    matches!(&let_expr.bindings[0].initializer.kind, ExprKind::Variable(name) if name == "a")
+                                );
                                 // The body is a block with two assignments
                                 match &let_expr.body.kind {
                                     ExprKind::Block(inner) => {
@@ -2431,7 +2469,7 @@ mod tests {
         }
     }
 
-   #[test]
+    #[test]
     fn parses_macro_call_with_trailing_block() {
         let src = "{ repeat(3) { print(\"hi\"); }; print(0); }";
         let program = parse_source(src);
@@ -2455,9 +2493,13 @@ mod tests {
                                 assert_eq!(inner_block.expressions.len(), 1);
                                 match &inner_block.expressions[0].kind {
                                     ExprKind::Call(call) => {
-                                        assert!(matches!(&call.callee.kind, ExprKind::Variable(name) if name == "print"));
+                                        assert!(
+                                            matches!(&call.callee.kind, ExprKind::Variable(name) if name == "print")
+                                        );
                                         assert_eq!(call.args.len(), 1);
-                                        assert!(matches!(&call.args[0].kind, ExprKind::Literal(Literal::String(s)) if s == "hi"));
+                                        assert!(
+                                            matches!(&call.args[0].kind, ExprKind::Literal(Literal::String(s)) if s == "hi")
+                                        );
                                     }
                                     _ => panic!("block body is not a call"),
                                 }
@@ -2503,7 +2545,8 @@ mod tests {
     #[test]
     fn parses_macro_with_block_body_without_arrow() {
         // Macros can have a block body without `=>`
-        let src = "def greet(name: String): String { \"Hello, \" @ name; } print(greet(\"World\"));";
+        let src =
+            "def greet(name: String): String { \"Hello, \" @ name; } print(greet(\"World\"));";
         let program = parse_source(src);
         match &program.declarations[0].kind {
             DeclarationKind::Macro(m) => {
@@ -2522,7 +2565,8 @@ mod tests {
     #[test]
     fn parses_macro_with_arrow_and_block_body() {
         // Syntax: def name(params): Type => { ... }
-        let src = "def greet(name: String): String => { \"Hello, \" @ name; }; print(greet(\"World\"));";
+        let src =
+            "def greet(name: String): String => { \"Hello, \" @ name; }; print(greet(\"World\"));";
         let program = parse_source(src);
         match &program.declarations[0].kind {
             DeclarationKind::Macro(m) => {

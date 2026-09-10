@@ -5,16 +5,16 @@
 //! remain (from macros-inside-macros), the pass repeats. A recursion guard
 //! prevents infinite loops.
 
-use std::collections::HashSet;
 use hulk_ast::{
-    DeclarationKind, Expr, ExprKind, MacroArg, MacroCallExpr,
-    MacroParam, MacroParamKind, Program, TypeMemberKind, MacroMatchExpr,
+    DeclarationKind, Expr, ExprKind, MacroArg, MacroCallExpr, MacroMatchExpr, MacroParam,
+    MacroParamKind, Program, TypeMemberKind,
 };
+use std::collections::HashSet;
 
 use crate::collect::MacroRegistry;
 use crate::error::{MacroError, MacroErrorKind};
-use crate::substitute::{collect_let_bindings, substitute, SubstMap};
 use crate::pattern::try_match;
+use crate::substitute::{collect_let_bindings, substitute, SubstMap};
 
 /// Hard-coded expansion passes limit
 const MAX_EXPANSION_PASSES: usize = 64;
@@ -24,11 +24,7 @@ const MAX_EXPANSION_PASSES: usize = 64;
 /// Mutates `program` in place. After this call, no `MacroCallExpr` or
 /// `MacroDecl` nodes should remain in the AST. (MacroDecls are removed
 /// by `collect::collect` before this runs.)
-pub fn expand(
-    program: &mut Program,
-    registry: &MacroRegistry,
-    errors: &mut Vec<MacroError>,
-) {
+pub fn expand(program: &mut Program, registry: &MacroRegistry, errors: &mut Vec<MacroError>) {
     // Expand declarations (function/method bodies may contain macro calls).
     let mut decls = std::mem::take(&mut program.declarations);
     for decl in &mut decls {
@@ -73,8 +69,8 @@ fn expand_expr(
             let span = expr.span;
             match registry.get(&name) {
                 None => {
-                    // May be a regular function call that was mis-classified by the parser 
-                    // (e.g., function name followed by a block that isn't a macro). 
+                    // May be a regular function call that was mis-classified by the parser
+                    // (e.g., function name followed by a block that isn't a macro).
                     //
                     // Convert to a regular Call.
                     if mc.body.is_some() {
@@ -85,18 +81,22 @@ fn expand_expr(
                         return expr;
                     }
                     // No trailing body — convert to a normal Call expression.
-                    let args: Vec<Expr> = mc.args.iter().map(|a| match a {
-                        MacroArg::Expr(e) => expand_expr(e.clone(), registry, errors, depth),
-                        _ => {
-                            errors.push(MacroError::new(
-                                MacroErrorKind::MacroArgInNonMacroCall { name: name.clone() },
-                                span,
-                            ));
-                            Expr::new(ExprKind::Variable("__error__".to_string()), span)
-                        }
-                    }).collect();
+                    let args: Vec<Expr> = mc
+                        .args
+                        .iter()
+                        .map(|a| match a {
+                            MacroArg::Expr(e) => expand_expr(e.clone(), registry, errors, depth),
+                            _ => {
+                                errors.push(MacroError::new(
+                                    MacroErrorKind::MacroArgInNonMacroCall { name: name.clone() },
+                                    span,
+                                ));
+                                Expr::new(ExprKind::Variable("__error__".to_string()), span)
+                            }
+                        })
+                        .collect();
                     let callee = Expr::variable(name, span);
-                    return Expr::call(callee, args, span);
+                    Expr::call(callee, args, span)
                 }
                 Some((_macro_decl, _def_span)) => {
                     // Expand the macro call.
@@ -104,9 +104,9 @@ fn expand_expr(
                         Some(expanded) => {
                             // Recursively expand in case the expansion itself
                             // contains macro calls.
-                            return expand_expr(expanded, registry, errors, depth + 1);
+                            expand_expr(expanded, registry, errors, depth + 1)
                         }
-                        None => return expr, // error already pushed
+                        None => expr, // error already pushed
                     }
                 }
             }
@@ -130,7 +130,7 @@ fn expand_expr(
             // Not a macro call -> recursively expand children and keep as Call
             rebuild_expr_children(expr, registry, errors, depth)
         }
-       ExprKind::MacroMatch(mm) => {
+        ExprKind::MacroMatch(mm) => {
             // Clone the scrutinee to avoid moving out of mm.
             let scrutinee = expand_expr((*mm.scrutinee).clone(), registry, errors, depth);
 
@@ -193,9 +193,14 @@ fn expand_macro_call(
     //
     // Count non-BodyExpr params (the BodyExpr is the trailing `{ }` block).
     let explicit_params: Vec<&MacroParam> = macro_decl
-        .params.iter().filter(|p| p.kind != MacroParamKind::BodyExpr).collect();
+        .params
+        .iter()
+        .filter(|p| p.kind != MacroParamKind::BodyExpr)
+        .collect();
     let has_body_param = macro_decl
-        .params.iter().any(|p| p.kind == MacroParamKind::BodyExpr);
+        .params
+        .iter()
+        .any(|p| p.kind == MacroParamKind::BodyExpr);
 
     if mc.args.len() != explicit_params.len() {
         errors.push(MacroError::new(
@@ -304,8 +309,11 @@ fn expand_macro_call(
 
     // Handle the `*expr` body parameter.
     if has_body_param {
-        let body_param = macro_decl.params.iter()
-            .find(|p| p.kind == MacroParamKind::BodyExpr).unwrap();
+        let body_param = macro_decl
+            .params
+            .iter()
+            .find(|p| p.kind == MacroParamKind::BodyExpr)
+            .unwrap();
         let body_block = mc.body.as_deref().unwrap().clone();
         subst.insert_expr(body_param.name.clone(), body_block);
     }
@@ -333,23 +341,30 @@ fn rebuild_expr_children(
 ) -> Expr {
     let span = expr.span;
     macro_rules! ex {
-        ($e:expr) => { expand_expr($e, registry, errors, depth) }
+        ($e:expr) => {
+            expand_expr($e, registry, errors, depth)
+        };
     }
     match expr.kind {
         ExprKind::Block(b) => Expr::new(
             ExprKind::Block(hulk_ast::BlockExpr::new(
-                b.expressions.into_iter().map(|e| ex!(e)).collect()
+                b.expressions.into_iter().map(|e| ex!(e)).collect(),
             )),
             span,
         ),
         ExprKind::Let(l) => Expr::new(
             ExprKind::Let(hulk_ast::LetExpr::new(
-                l.bindings.into_iter().map(|b| hulk_ast::LetBinding::new(
-                    b.name,
-                    b.type_annotation,
-                    ex!(b.initializer),
-                    b.name_span,
-                )).collect(),
+                l.bindings
+                    .into_iter()
+                    .map(|b| {
+                        hulk_ast::LetBinding::new(
+                            b.name,
+                            b.type_annotation,
+                            ex!(b.initializer),
+                            b.name_span,
+                        )
+                    })
+                    .collect(),
                 ex!(*l.body),
             )),
             span,
@@ -358,9 +373,10 @@ fn rebuild_expr_children(
             ExprKind::If(hulk_ast::IfExpr::new(
                 ex!(*i.condition),
                 ex!(*i.then_branch),
-                i.elif_branches.into_iter().map(|e| hulk_ast::ElifBranch::new(
-                    ex!(e.condition), ex!(e.body)
-                )).collect(),
+                i.elif_branches
+                    .into_iter()
+                    .map(|e| hulk_ast::ElifBranch::new(ex!(e.condition), ex!(e.body)))
+                    .collect(),
                 ex!(*i.else_branch),
             )),
             span,
@@ -386,13 +402,16 @@ fn rebuild_expr_children(
         ),
         ExprKind::Assign(a) => {
             let new_target = match a.target {
-                hulk_ast::AssignTarget::Member { object, field } =>
-                    hulk_ast::AssignTarget::Member { object: Box::new(ex!(*object)), field },
-                hulk_ast::AssignTarget::Index { object, index } =>
-                    hulk_ast::AssignTarget::Index {
+                hulk_ast::AssignTarget::Member { object, field } => {
+                    hulk_ast::AssignTarget::Member {
                         object: Box::new(ex!(*object)),
-                        index: Box::new(ex!(*index)),
-                    },
+                        field,
+                    }
+                }
+                hulk_ast::AssignTarget::Index { object, index } => hulk_ast::AssignTarget::Index {
+                    object: Box::new(ex!(*object)),
+                    index: Box::new(ex!(*index)),
+                },
                 other => other,
             };
             Expr::new(
@@ -401,6 +420,10 @@ fn rebuild_expr_children(
             )
         }
         // Leaf and identity nodes
-        other => Expr { kind: other, anno: (), span },
+        other => Expr {
+            kind: other,
+            anno: (),
+            span,
+        },
     }
 }

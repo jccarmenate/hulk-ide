@@ -150,23 +150,17 @@ pub fn compile(
         .map_err(|e| error::CodegenError::llvm_verification(e.to_string()))?;
 
     // Verify pre-optimization module.
-    codegen
-        .module
-        .verify()
-        .map_err(|e| error::CodegenError::llvm_verification(
-            format!("pre-optimization: {}", e.to_string())
-        ))?;
+    codegen.module.verify().map_err(|e| {
+        error::CodegenError::llvm_verification(format!("pre-optimization: {}", e.to_string()))
+    })?;
 
     // Optimize IR code
     optimize::optimize(&codegen, opts.opt_level)?;
-    
+
     // Verify post-optimization module.
-    codegen
-        .module
-        .verify()
-        .map_err(|e| error::CodegenError::llvm_verification(
-            format!("post-optimization: {}", e.to_string())
-        ))?;
+    codegen.module.verify().map_err(|e| {
+        error::CodegenError::llvm_verification(format!("post-optimization: {}", e.to_string()))
+    })?;
 
     // Optional IR dump
     if let Some(ll_path) = &opts.emit_llvm_path {
@@ -192,7 +186,7 @@ pub fn link_output(
     // Compute the workspace target directory from CARGO_MANIFEST_DIR.
     let manifest_dir = PathBuf::from(CARGO_MANIFEST_DIR);
     let workspace_target = manifest_dir
-        .parent()                 // crates/
+        .parent() // crates/
         .and_then(|p| p.parent()) // workspace root
         .map(|root| root.join("target"))
         .expect("locate workspace target directory");
@@ -573,10 +567,10 @@ mod macro_tests {
     use super::*;
     use hulk_lexer::Lexer;
     use hulk_parser::parse;
-    use hulk_transpile::expand_program;
     use hulk_semantic::analyze;
-    use std::process::Command;
+    use hulk_transpile::expand_program;
     use std::path::PathBuf;
+    use std::process::Command;
     use tempfile::tempdir;
 
     fn ensure_rt_built() {
@@ -591,8 +585,8 @@ mod macro_tests {
         let raw_profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
 
         let dir_name: &str = match raw_profile.as_str() {
-        "dev" | "test" => "debug",
-        other => other,
+            "dev" | "test" => "debug",
+            other => other,
         };
 
         let cargo_profile: &str = match raw_profile.as_str() {
@@ -606,7 +600,10 @@ mod macro_tests {
             .status()
             .unwrap_or_else(|e| panic!("Failed to invoke cargo to build hulk-rt: {e}"));
 
-        assert!(status.success(), "cargo build -p hulk-rt --profile {cargo_profile} failed");
+        assert!(
+            status.success(),
+            "cargo build -p hulk-rt --profile {cargo_profile} failed"
+        );
 
         let rt_lib_path = workspace_target.join(dir_name).join("libhulk_rt.a");
 
@@ -622,7 +619,11 @@ mod macro_tests {
         let tokens = Lexer::new(src).tokenize().expect("lex failed");
         let mut program = parse(tokens).expect("parse failed");
         let macro_errors = expand_program(&mut program);
-        assert!(macro_errors.is_empty(), "macro expansion errors: {:?}", macro_errors);
+        assert!(
+            macro_errors.is_empty(),
+            "macro expansion errors: {:?}",
+            macro_errors
+        );
         let verified = analyze(&program).expect("semantic analysis failed");
 
         let temp_dir = tempdir().expect("create temp dir");
@@ -638,7 +639,11 @@ mod macro_tests {
         let output = Command::new(&output_path)
             .output()
             .expect("failed to run executable");
-        assert!(output.status.success(), "executable failed: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "executable failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 

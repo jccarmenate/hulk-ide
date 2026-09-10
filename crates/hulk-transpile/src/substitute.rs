@@ -1,21 +1,21 @@
 //! Core substitution and variable sanitization for macro expansion.
-//! 
+//!
 //! Hndles:
 //! 1. Cloning the macro body template
 //! 2. Renaming internal (non-placeholder, non-symbolic) `let` bindings to unique
 //!    sanitized names and updating all their references inside the cloned body
 //! 3. Substituting each parameter name occurrence with the corresponding argument
 
-use std::collections::HashMap;
 use hulk_ast::{
     AssignExpr, AssignTarget, BlockExpr, DowncastExpr, ElifBranch, Expr, ExprKind, ForExpr,
-    IndexExpr, LetBinding, LetExpr, MacroArg, MatchCase, MemberExpr, NewExpr, TypeTestExpr, 
-    UnaryExpr, VectorComprehension, VectorExpr, WhileExpr, MacroCase, MacroMatchExpr,
+    IndexExpr, LetBinding, LetExpr, MacroArg, MacroCase, MacroMatchExpr, MatchCase, MemberExpr,
+    NewExpr, TypeTestExpr, UnaryExpr, VectorComprehension, VectorExpr, WhileExpr,
 };
+use std::collections::HashMap;
 
 /// Substitution map for a single macro expansion.
 ///
-/// For each macro parameter, this function records what to substitute when 
+/// For each macro parameter, this function records what to substitute when
 /// encounters `Variable(param_name)` in the cloned body:
 ///
 /// - Regular  -> replace with the arg expression (deep clone).
@@ -33,7 +33,9 @@ pub struct SubstMap {
 
 impl SubstMap {
     pub fn new() -> Self {
-        Self { expr_subst: HashMap::new() }
+        Self {
+            expr_subst: HashMap::new(),
+        }
     }
 
     pub fn insert_expr(&mut self, name: String, expr: Expr) {
@@ -43,16 +45,13 @@ impl SubstMap {
     pub fn insert_var(&mut self, from: String, to: String) {
         // A Variable->Variable substitution.
         use hulk_ast::SourceSpan;
-        self.expr_subst.insert(
-            from,
-            Expr::variable(to, SourceSpan::default()),
-        );
+        self.expr_subst
+            .insert(from, Expr::variable(to, SourceSpan::default()));
     }
 }
 
 /// Counter for generating unique sanitized names.
-static SANITIZE_COUNTER: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
+static SANITIZE_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 fn fresh_name(original: &str) -> String {
     let n = SANITIZE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -72,7 +71,9 @@ pub fn collect_let_bindings(
     match &expr.kind {
         ExprKind::Let(let_expr) => {
             for binding in &let_expr.bindings {
-                if !protected.contains(&binding.name) && !subst.expr_subst.contains_key(&binding.name) {
+                if !protected.contains(&binding.name)
+                    && !subst.expr_subst.contains_key(&binding.name)
+                {
                     let fresh = fresh_name(&binding.name);
                     subst.insert_var(binding.name.clone(), fresh);
                 }
@@ -83,7 +84,9 @@ pub fn collect_let_bindings(
             collect_let_bindings(&let_expr.body, protected, subst);
         }
         ExprKind::Block(b) => {
-            for e in &b.expressions { collect_let_bindings(e, protected, subst); }
+            for e in &b.expressions {
+                collect_let_bindings(e, protected, subst);
+            }
         }
         ExprKind::If(i) => {
             collect_let_bindings(&i.condition, protected, subst);
@@ -132,21 +135,25 @@ pub fn substitute(expr: &Expr, subst: &SubstMap) -> Expr {
         }
         ExprKind::Let(let_expr) => {
             // Rewrite binding names if they have a sanitized substitute.
-            let new_bindings: Vec<LetBinding> = let_expr.bindings.iter().map(|b| {
-                let new_name = if let Some(ExprKind::Variable(mapped)) =
-                    subst.expr_subst.get(&b.name).map(|e| &e.kind)
-                {
-                    mapped.clone()
-                } else {
-                    b.name.clone()
-                };
-                LetBinding::new(
-                    new_name,
-                    b.type_annotation.clone(),
-                    substitute(&b.initializer, subst),
-                    b.name_span,
-                )
-            }).collect();
+            let new_bindings: Vec<LetBinding> = let_expr
+                .bindings
+                .iter()
+                .map(|b| {
+                    let new_name = if let Some(ExprKind::Variable(mapped)) =
+                        subst.expr_subst.get(&b.name).map(|e| &e.kind)
+                    {
+                        mapped.clone()
+                    } else {
+                        b.name.clone()
+                    };
+                    LetBinding::new(
+                        new_name,
+                        b.type_annotation.clone(),
+                        substitute(&b.initializer, subst),
+                        b.name_span,
+                    )
+                })
+                .collect();
             let new_body = substitute(&let_expr.body, subst);
             Expr::new(
                 ExprKind::Let(LetExpr::new(new_bindings, new_body)),
@@ -156,7 +163,7 @@ pub fn substitute(expr: &Expr, subst: &SubstMap) -> Expr {
         // All compound forms: recursively substitute children.
         ExprKind::Block(b) => Expr::new(
             ExprKind::Block(BlockExpr::new(
-                b.expressions.iter().map(|e| substitute(e, subst)).collect()
+                b.expressions.iter().map(|e| substitute(e, subst)).collect(),
             )),
             expr.span,
         ),
@@ -164,10 +171,15 @@ pub fn substitute(expr: &Expr, subst: &SubstMap) -> Expr {
             ExprKind::If(hulk_ast::IfExpr::new(
                 substitute(&i.condition, subst),
                 substitute(&i.then_branch, subst),
-                i.elif_branches.iter().map(|elif| ElifBranch::new(
-                    substitute(&elif.condition, subst),
-                    substitute(&elif.body, subst),
-                )).collect(),
+                i.elif_branches
+                    .iter()
+                    .map(|elif| {
+                        ElifBranch::new(
+                            substitute(&elif.condition, subst),
+                            substitute(&elif.body, subst),
+                        )
+                    })
+                    .collect(),
                 substitute(&i.else_branch, subst),
             )),
             expr.span,
@@ -200,16 +212,14 @@ pub fn substitute(expr: &Expr, subst: &SubstMap) -> Expr {
                         AssignTarget::Variable(v.clone())
                     }
                 }
-                AssignTarget::Member { object, field } =>
-                    AssignTarget::Member {
-                        object: Box::new(substitute(object, subst)),
-                        field: field.clone(),
-                    },
-                AssignTarget::Index { object, index } =>
-                    AssignTarget::Index {
-                        object: Box::new(substitute(object, subst)),
-                        index: Box::new(substitute(index, subst)),
-                    },
+                AssignTarget::Member { object, field } => AssignTarget::Member {
+                    object: Box::new(substitute(object, subst)),
+                    field: field.clone(),
+                },
+                AssignTarget::Index { object, index } => AssignTarget::Index {
+                    object: Box::new(substitute(object, subst)),
+                    index: Box::new(substitute(index, subst)),
+                },
             };
             Expr::new(
                 ExprKind::Assign(AssignExpr::new(new_target, substitute(&a.value, subst))),
@@ -217,7 +227,10 @@ pub fn substitute(expr: &Expr, subst: &SubstMap) -> Expr {
             )
         }
         ExprKind::Unary(u) => Expr::new(
-            ExprKind::Unary(UnaryExpr { op: u.op, expr: Box::new(substitute(&u.expr, subst)) }),
+            ExprKind::Unary(UnaryExpr {
+                op: u.op,
+                expr: Box::new(substitute(&u.expr, subst)),
+            }),
             expr.span,
         ),
         ExprKind::Binary(b) => Expr::new(
@@ -251,21 +264,30 @@ pub fn substitute(expr: &Expr, subst: &SubstMap) -> Expr {
             expr.span,
         ),
         ExprKind::Index(i) => Expr::new(
-            ExprKind::Index(IndexExpr::new(substitute(&i.object, subst), substitute(&i.index, subst))),
+            ExprKind::Index(IndexExpr::new(
+                substitute(&i.object, subst),
+                substitute(&i.index, subst),
+            )),
             expr.span,
         ),
         ExprKind::TypeTest(t) => Expr::new(
-            ExprKind::TypeTest(TypeTestExpr::new(substitute(&t.expr, subst), t.type_name.clone())),
+            ExprKind::TypeTest(TypeTestExpr::new(
+                substitute(&t.expr, subst),
+                t.type_name.clone(),
+            )),
             expr.span,
         ),
         ExprKind::Downcast(d) => Expr::new(
-            ExprKind::Downcast(DowncastExpr::new(substitute(&d.expr, subst), d.type_name.clone())),
+            ExprKind::Downcast(DowncastExpr::new(
+                substitute(&d.expr, subst),
+                d.type_name.clone(),
+            )),
             expr.span,
         ),
         ExprKind::Vector(v) => match v {
             VectorExpr::Literal(items) => Expr::new(
                 ExprKind::Vector(VectorExpr::Literal(
-                    items.iter().map(|i| substitute(i, subst)).collect()
+                    items.iter().map(|i| substitute(i, subst)).collect(),
                 )),
                 expr.span,
             ),
@@ -281,7 +303,10 @@ pub fn substitute(expr: &Expr, subst: &SubstMap) -> Expr {
         ExprKind::Match(m) => Expr::new(
             ExprKind::Match(hulk_ast::MatchExpr::new(
                 substitute(&m.value, subst),
-                m.cases.iter().map(|c| MatchCase::new(c.pattern.clone(), substitute(&c.body, subst))).collect(),
+                m.cases
+                    .iter()
+                    .map(|c| MatchCase::new(c.pattern.clone(), substitute(&c.body, subst)))
+                    .collect(),
             )),
             expr.span,
         ),
@@ -297,17 +322,21 @@ pub fn substitute(expr: &Expr, subst: &SubstMap) -> Expr {
         ExprKind::MacroCall(mc) => Expr::new(
             ExprKind::MacroCall(hulk_ast::MacroCallExpr::new(
                 mc.name.clone(),
-                mc.args.iter().map(|a| match a {
-                    MacroArg::Expr(e) => MacroArg::Expr(substitute(e, subst)),
-                    other => other.clone(),
-                }).collect(),
+                mc.args
+                    .iter()
+                    .map(|a| match a {
+                        MacroArg::Expr(e) => MacroArg::Expr(substitute(e, subst)),
+                        other => other.clone(),
+                    })
+                    .collect(),
                 mc.body.as_deref().map(|b| substitute(b, subst)),
             )),
             expr.span,
         ),
         ExprKind::MacroMatch(mm) => {
             let new_scrutinee = substitute(&mm.scrutinee, subst);
-            let new_cases = mm.cases
+            let new_cases = mm
+                .cases
                 .iter()
                 .map(|case| MacroCase {
                     pattern: case.pattern.clone(), // patterns are not substituted

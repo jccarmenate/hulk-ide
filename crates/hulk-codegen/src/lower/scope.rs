@@ -6,6 +6,10 @@ use hulk_semantic::Type;
 use inkwell::types::BasicTypeEnum;
 use inkwell::values::PointerValue;
 
+/// A variable's `alloca` pointer, its LLVM storage type, its semantic type, and
+/// whether this scope owns it (and so must release it on scope exit).
+type ScopeEntry<'ctx> = (PointerValue<'ctx>, BasicTypeEnum<'ctx>, Type, bool);
+
 /// A stack of scopes, each mapping a variable name to its LLVM `alloca` pointer.
 ///
 /// Each entry carries an `owned` flag. Only owned bindings (let variables,
@@ -13,7 +17,7 @@ use inkwell::values::PointerValue;
 /// (`self`, method/function parameters, loop variables) are skipped.
 #[derive(Default)]
 pub struct ScopeStack<'ctx> {
-    scopes: Vec<HashMap<String, (PointerValue<'ctx>, BasicTypeEnum<'ctx>, Type, bool)>>,
+    scopes: Vec<HashMap<String, ScopeEntry<'ctx>>>,
     /// For each scope, the ordered list of alloca addresses that were shadow-pushed.
     /// Used by pop_scope to emit shadow pops in reverse (LIFO) order.
     shadow_slots: Vec<Vec<PointerValue<'ctx>>>,
@@ -37,12 +41,7 @@ impl<'ctx> ScopeStack<'ctx> {
     ///
     /// # Panics
     /// Panics if there is no scope to pop (i.e., the stack is empty).
-    pub fn pop_scope(
-        &mut self,
-    ) -> (
-        HashMap<String, (PointerValue<'ctx>, BasicTypeEnum<'ctx>, Type, bool)>,
-        Vec<PointerValue<'ctx>>,
-    ) {
+    pub fn pop_scope(&mut self) -> (HashMap<String, ScopeEntry<'ctx>>, Vec<PointerValue<'ctx>>) {
         let scope = self.scopes.pop().expect("scope stack underflow");
         let shadow = self.shadow_slots.pop().expect("shadow stack underflow");
         (scope, shadow)
@@ -58,7 +57,7 @@ impl<'ctx> ScopeStack<'ctx> {
     /// `shadow_slot`: if `Some(ptr)`, the alloca address was shadow-pushed and
     /// must be popped when this scope exits. Pass `None` for numeric/boolean
     /// locals that are not GC roots.
-    /// 
+    ///
     /// Overwrites any existing binding with the same name in that scope.
     pub fn declare(
         &mut self,
@@ -80,10 +79,7 @@ impl<'ctx> ScopeStack<'ctx> {
     }
 
     /// Looks up a variable starting from the innermost scope outward.
-    pub fn lookup(
-        &self,
-        name: &str,
-    ) -> Option<(PointerValue<'ctx>, BasicTypeEnum<'ctx>, Type)> {
+    pub fn lookup(&self, name: &str) -> Option<(PointerValue<'ctx>, BasicTypeEnum<'ctx>, Type)> {
         for scope in self.scopes.iter().rev() {
             if let Some((ptr, llvm_ty, sem_ty, _owned)) = scope.get(name) {
                 return Some((*ptr, *llvm_ty, sem_ty.clone()));

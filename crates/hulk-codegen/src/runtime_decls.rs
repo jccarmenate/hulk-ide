@@ -116,10 +116,13 @@ pub fn declare_downcast_fail<'ctx>(ctx: &CodegenCtx<'ctx>) -> FunctionValue<'ctx
 
 /// Declares `hulk_rt_internal_error() -> !` (noreturn).
 pub fn declare_internal_error<'ctx>(ctx: &CodegenCtx<'ctx>) -> FunctionValue<'ctx> {
-    if let Some(f) = ctx.module.get_function("hulk_rt_internal_error") { return f; }
+    if let Some(f) = ctx.module.get_function("hulk_rt_internal_error") {
+        return f;
+    }
     let void_type = ctx.context.void_type();
     let fn_type = void_type.fn_type(&[], false);
-    ctx.module.add_function("hulk_rt_internal_error", fn_type, None)
+    ctx.module
+        .add_function("hulk_rt_internal_error", fn_type, None)
 }
 
 // ─── Vector builtin methods ───────────────────────────────────────────────
@@ -240,7 +243,7 @@ pub fn declare_env_new<'ctx>(ctx: &CodegenCtx<'ctx>) -> FunctionValue<'ctx> {
     let ptr_type = ctx.context.ptr_type(Default::default());
     let fn_type = ptr_type.fn_type(&[i64_type.into(), ptr_type.into()], false);
     ctx.module.add_function("hulk_rt_env_new", fn_type, None)
-} 
+}
 
 // ─── Match fail trap ──────────────────────────────────────────────────────
 
@@ -394,7 +397,8 @@ pub fn declare_shadow_push<'ctx>(ctx: &CodegenCtx<'ctx>) -> FunctionValue<'ctx> 
     let void_type = ctx.context.void_type();
     // Signature: (slot: *mut ptr) -> void
     let fn_type = void_type.fn_type(&[ptr_type.into()], false);
-    ctx.module.add_function("hulk_rt_shadow_push", fn_type, None)
+    ctx.module
+        .add_function("hulk_rt_shadow_push", fn_type, None)
 }
 
 /// Declares `hulk_rt_shadow_pop() -> void`.
@@ -500,7 +504,8 @@ pub fn declare_all(ctx: &mut CodegenCtx) {
         .insert("hulk_rt_string_equals".to_string(), str_eq);
 
     let internal_error = declare_internal_error(ctx);
-    ctx.functions.insert("hulk_rt_internal_error".to_string(), internal_error);
+    ctx.functions
+        .insert("hulk_rt_internal_error".to_string(), internal_error);
 
     // ─── Vector builtin methods ───────────────────────────────────────────
 

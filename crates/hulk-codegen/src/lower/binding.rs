@@ -13,16 +13,16 @@
 //!   subsequent bindings can refer to earlier ones.
 //! - A plain `Block` does not introduce a new scope (handled in `control.rs`).
 
-use hulk_ast::{AssignExpr, AssignTarget, LetExpr, ExprKind};
+use hulk_ast::{AssignExpr, AssignTarget, ExprKind, LetExpr};
 use hulk_semantic::Type;
 use inkwell::values::BasicValueEnum;
 
 use super::lower_expr;
 use crate::error::CodegenError;
 use crate::lower::utils::{convert_to_protocol, is_protocol_or_iterable, resolve_type_ref_to_type};
+use crate::lower::utils::{ensure_boxed, is_fat_pointer_type, is_heap_allocated_type};
 use crate::lower::LowerCtx;
 use crate::lower::{index, member, variable};
-use crate::lower::utils::{ensure_boxed, is_fat_pointer_type, is_heap_allocated_type};
 
 /// Lowers a `let` expression with one or more bindings.
 ///
@@ -81,27 +81,40 @@ pub fn lower_let<'ctx>(
 
         // 5. If the initializer is a variable or member access, retain the value
         // because it's a borrowed reference, not a newly created one.
-        if is_heap_allocated_type(&declared_ty, ctx.registry) {
-            if matches!(&binding.initializer.kind, ExprKind::Variable(_) | ExprKind::Member(_)) {
-                let retain_fn = ctx.codegen.functions.get("hulk_rt_retain")
-                    .cloned()
-                    .ok_or_else(|| CodegenError::unsupported("hulk_rt_retain not declared", Some(binding.initializer.span)))?;
-                // Fat-pointer values (Function/Iterable/protocol) are a
-                // two-word { ptr, ptr } struct — hulk_rt_retain only takes
-                // a single pointer, so extract the object/env pointer
-                // (field 0) first, same as the closure-capture retain
-                // logic in lambda.rs.
-                let retain_arg = if is_fat_pointer_type(&declared_ty, ctx.registry) {
-                    ctx.codegen.builder
-                        .build_extract_value(init_val.into_struct_value(), 0, "retain_let_ptr")
-                        .map_err(|e| CodegenError::llvm_verification(e.to_string()))?
-                } else {
-                    init_val
-                };
-                ctx.codegen.builder
-                    .build_call(retain_fn, &[retain_arg.into()], "retain_let")
-                    .map_err(|e| CodegenError::llvm_verification(e.to_string()))?;
-            }
+        if is_heap_allocated_type(&declared_ty, ctx.registry)
+            && matches!(
+                &binding.initializer.kind,
+                ExprKind::Variable(_) | ExprKind::Member(_)
+            )
+        {
+            let retain_fn = ctx
+                .codegen
+                .functions
+                .get("hulk_rt_retain")
+                .cloned()
+                .ok_or_else(|| {
+                    CodegenError::unsupported(
+                        "hulk_rt_retain not declared",
+                        Some(binding.initializer.span),
+                    )
+                })?;
+            // Fat-pointer values (Function/Iterable/protocol) are a
+            // two-word { ptr, ptr } struct — hulk_rt_retain only takes
+            // a single pointer, so extract the object/env pointer
+            // (field 0) first, same as the closure-capture retain
+            // logic in lambda.rs.
+            let retain_arg = if is_fat_pointer_type(&declared_ty, ctx.registry) {
+                ctx.codegen
+                    .builder
+                    .build_extract_value(init_val.into_struct_value(), 0, "retain_let_ptr")
+                    .map_err(|e| CodegenError::llvm_verification(e.to_string()))?
+            } else {
+                init_val
+            };
+            ctx.codegen
+                .builder
+                .build_call(retain_fn, &[retain_arg.into()], "retain_let")
+                .map_err(|e| CodegenError::llvm_verification(e.to_string()))?;
         }
 
         // 6. Declare the variable with the resolved semantic type.

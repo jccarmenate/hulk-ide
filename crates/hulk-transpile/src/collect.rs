@@ -4,9 +4,9 @@
 //! declaration list. Only `Function`, `Type`, and `Protocol` declarations
 //! survive to the semantic phase.
 
-use std::collections::HashMap;
-use hulk_ast::{DeclarationKind, MacroDecl, Program, SourceSpan};
 use crate::error::{MacroError, MacroErrorKind};
+use hulk_ast::{DeclarationKind, MacroDecl, Program, SourceSpan};
+use std::collections::HashMap;
 
 pub type MacroRegistry = HashMap<String, (MacroDecl, SourceSpan)>;
 
@@ -14,10 +14,7 @@ pub type MacroRegistry = HashMap<String, (MacroDecl, SourceSpan)>;
 /// everything else (left in `program`).
 ///
 /// Duplicate macro names are reported as errors.
-pub fn collect(
-    program: &mut Program,
-    errors: &mut Vec<MacroError>,
-) -> MacroRegistry {
+pub fn collect(program: &mut Program, errors: &mut Vec<MacroError>) -> MacroRegistry {
     let mut registry = MacroRegistry::new();
     let mut remaining = Vec::new();
 
@@ -27,7 +24,8 @@ pub fn collect(
                 if registry.contains_key(&m.name) {
                     errors.push(MacroError::new(
                         MacroErrorKind::UndefinedMacro(format!(
-                            "duplicate macro definition `{}`", m.name
+                            "duplicate macro definition `{}`",
+                            m.name
                         )),
                         decl.span,
                     ));

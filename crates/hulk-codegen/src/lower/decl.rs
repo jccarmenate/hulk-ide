@@ -105,7 +105,7 @@ fn define_function(
         let param_value = param_values
             .get(i)
             .ok_or_else(|| CodegenError::llvm_verification(format!("missing parameter {}", i)))?;
-        
+
         // Handles alloca, store, shadow-push (for pointer types), and marks the binding as borrowed so
         // pop_scope does not release the caller's reference.
         lower_ctx.declare_var(param_name, *param_value, param_ty.clone(), true)?;

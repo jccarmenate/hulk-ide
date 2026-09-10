@@ -206,9 +206,8 @@ fn lower_named_method_from_val<'ctx>(
 
     // Devirtualize when the type has no subtypes.
     if !has_subtypes(type_name, ctx.registry) {
-        let owner =
-            crate::layout::owning_type_for_method(type_name, method_name, ctx.registry)
-                .unwrap_or_else(|| type_name.to_string());
+        let owner = crate::layout::owning_type_for_method(type_name, method_name, ctx.registry)
+            .unwrap_or_else(|| type_name.to_string());
         let qualified_name = format!("{}::{}", owner, method_name);
         if let Some(fn_val) = ctx.codegen.functions.get(&qualified_name) {
             let call_site = ctx
@@ -227,7 +226,10 @@ fn lower_named_method_from_val<'ctx>(
     let struct_ty = layout.struct_ty; // Copy — released before builder borrow
     let slot_idx = *layout.method_slots.get(method_name).ok_or_else(|| {
         CodegenError::unsupported(
-            format!("method '{}' not in vtable for type '{}'", method_name, type_name),
+            format!(
+                "method '{}' not in vtable for type '{}'",
+                method_name, type_name
+            ),
             Some(span),
         )
     })?;
@@ -269,9 +271,8 @@ fn lower_named_method_from_val<'ctx>(
         .map_err(|e| CodegenError::llvm_verification(e.to_string()))?
         .into_pointer_value();
 
-    let fn_owner =
-        crate::layout::owning_type_for_method(type_name, method_name, ctx.registry)
-            .unwrap_or_else(|| type_name.to_string());
+    let fn_owner = crate::layout::owning_type_for_method(type_name, method_name, ctx.registry)
+        .unwrap_or_else(|| type_name.to_string());
     let qualified_name = format!("{}::{}", fn_owner, method_name);
     let fn_decl = ctx
         .codegen

@@ -8,11 +8,9 @@
 // matched sub‑expressions. The expansion engine in `substitute.rs` uses this
 // to implement compile‑time `match` inside macro bodies.
 
-use std::collections::HashMap;
-use hulk_ast::{
-    Expr, ExprKind, MacroPattern, MacroPatternBind,
-};
 use crate::error::MacroErrorKind;
+use hulk_ast::{Expr, ExprKind, MacroPattern, MacroPatternBind};
+use std::collections::HashMap;
 
 /// Attempts to match a `pattern` against the concrete AST node `expr`.
 ///
@@ -52,7 +50,11 @@ pub fn try_match(
             Ok(None)
         }
 
-        MacroPattern::Bind { name, ty: _, pattern: inner } => {
+        MacroPattern::Bind {
+            name,
+            ty: _,
+            pattern: inner,
+        } => {
             let inner_result = try_match(inner, expr)?;
             if let Some(mut map) = inner_result {
                 if let Some(ref n) = name {
@@ -138,10 +140,8 @@ fn merge_maps(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hulk_ast::{
-        BinaryOp, Expr, Literal, MacroPattern, MacroPatternBind, SourceSpan, UnaryOp,
-    };
     use crate::error::MacroErrorKind;
+    use hulk_ast::{BinaryOp, Expr, Literal, MacroPattern, MacroPatternBind, SourceSpan, UnaryOp};
 
     fn s() -> SourceSpan {
         SourceSpan::new(1, 1)
@@ -208,14 +208,20 @@ mod tests {
     #[test]
     fn literal_string_matches_exact() {
         let pattern = MacroPattern::Literal(Literal::String("hello".to_string()));
-        assert_eq!(try_match(&pattern, &string_lit("hello")), Ok(Some(HashMap::new())));
+        assert_eq!(
+            try_match(&pattern, &string_lit("hello")),
+            Ok(Some(HashMap::new()))
+        );
         assert_eq!(try_match(&pattern, &string_lit("world")), Ok(None));
     }
 
     #[test]
     fn literal_bool_matches_exact() {
         let pattern = MacroPattern::Literal(Literal::Boolean(true));
-        assert_eq!(try_match(&pattern, &bool_lit(true)), Ok(Some(HashMap::new())));
+        assert_eq!(
+            try_match(&pattern, &bool_lit(true)),
+            Ok(Some(HashMap::new()))
+        );
         assert_eq!(try_match(&pattern, &bool_lit(false)), Ok(None));
     }
 

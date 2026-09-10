@@ -22,7 +22,11 @@ impl MacroError {
 
 impl fmt::Display for MacroError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({},{}) MACRO: {}", self.span.line, self.span.col, self.kind)
+        write!(
+            f,
+            "({},{}) MACRO: {}",
+            self.span.line, self.span.col, self.kind
+        )
     }
 }
 
@@ -34,7 +38,11 @@ pub enum MacroErrorKind {
     /// A macro call references a name that was never defined with `def`.
     UndefinedMacro(String),
     /// Wrong number of arguments supplied to a macro.
-    ArityMismatch { name: String, expected: usize, got: usize },
+    ArityMismatch {
+        name: String,
+        expected: usize,
+        got: usize,
+    },
     /// A `@sym` argument was not a plain variable reference.
     SymbolicArgNotVariable { macro_name: String, param: String },
     /// A macro calls itself (direct recursion detected during expansion).
@@ -53,18 +61,33 @@ impl fmt::Display for MacroErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UndefinedMacro(n) => write!(f, "undefined macro `{}`", n),
-            Self::ArityMismatch { name, expected, got } =>
-                write!(f, "macro `{}` expects {} arguments, got {}", name, expected, got),
-            Self::SymbolicArgNotVariable { macro_name, param } =>
-                write!(f, "symbolic argument `@{}` in macro `{}` must be a variable or attribute", param, macro_name),
+            Self::ArityMismatch {
+                name,
+                expected,
+                got,
+            } => write!(
+                f,
+                "macro `{}` expects {} arguments, got {}",
+                name, expected, got
+            ),
+            Self::SymbolicArgNotVariable { macro_name, param } => write!(
+                f,
+                "symbolic argument `@{}` in macro `{}` must be a variable or attribute",
+                param, macro_name
+            ),
             Self::RecursiveMacro(n) => write!(f, "macro `{}` recursively expands itself", n),
-            Self::MissingBodyBlock(n) => write!(f, "macro `{}` requires a trailing `{{ }}` block", n),
-            Self::MacroArgInNonMacroCall { name } =>
-                write!(f, "`@{}` or placeholder argument used in a non-macro call", name),
-            Self::NonExhaustiveMacroMatch  => 
-                write!(f, "non-exhaustive macro match"),
-            Self::DuplicatePatternBinding { name } =>
-                write!(f, "pattern binding `{}` is duplicated", name),
+            Self::MissingBodyBlock(n) => {
+                write!(f, "macro `{}` requires a trailing `{{ }}` block", n)
+            }
+            Self::MacroArgInNonMacroCall { name } => write!(
+                f,
+                "`@{}` or placeholder argument used in a non-macro call",
+                name
+            ),
+            Self::NonExhaustiveMacroMatch => write!(f, "non-exhaustive macro match"),
+            Self::DuplicatePatternBinding { name } => {
+                write!(f, "pattern binding `{}` is duplicated", name)
+            }
         }
     }
 }

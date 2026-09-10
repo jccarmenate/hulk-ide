@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use hulk_ast::{DeclarationKind, Expr, ExprKind, Literal, Program, TypeMemberKind, MacroArg};
+use hulk_ast::{DeclarationKind, Expr, ExprKind, Literal, MacroArg, Program, TypeMemberKind};
 
 use crate::error::{SemanticError, SemanticErrorKind};
 use crate::passes::utils::topological_order;
@@ -43,7 +43,7 @@ fn collect_new_constraints(
     program: &Program,
     errors: &mut Vec<SemanticError>,
     registry: &TypeRegistry,
-    
+
     constraints: &mut HashMap<(String, usize), Vec<Type>>,
 ) {
     traverse_exprs(program, errors, |expr| {
@@ -193,12 +193,16 @@ where
 {
     for decl in &program.declarations {
         match &decl.kind {
-            DeclarationKind::Function(func) => traverse_expr(&func.body, errors,  &mut f),
+            DeclarationKind::Function(func) => traverse_expr(&func.body, errors, &mut f),
             DeclarationKind::Type(ty) => {
                 for member in &ty.members {
                     match &member.kind {
-                        TypeMemberKind::Attribute(attr) => traverse_expr(&attr.initializer, errors, &mut f),
-                        TypeMemberKind::Method(method) => traverse_expr(&method.body, errors, &mut f),
+                        TypeMemberKind::Attribute(attr) => {
+                            traverse_expr(&attr.initializer, errors, &mut f)
+                        }
+                        TypeMemberKind::Method(method) => {
+                            traverse_expr(&method.body, errors, &mut f)
+                        }
                     }
                 }
                 if let Some(parent) = &ty.parent {
@@ -340,8 +344,11 @@ where
 }
 
 /// Helper to traverse assignment targets.
-fn traverse_assign_target<F>(target: &hulk_ast::AssignTarget, errors: &mut Vec<SemanticError>, f: &mut F)
-where
+fn traverse_assign_target<F>(
+    target: &hulk_ast::AssignTarget,
+    errors: &mut Vec<SemanticError>,
+    f: &mut F,
+) where
     F: FnMut(&Expr),
 {
     match target {

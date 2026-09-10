@@ -35,9 +35,9 @@ pub fn expand_program(program: &mut hulk_ast::Program) -> Vec<MacroError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hulk_ast::{DeclarationKind, ExprKind};
     use hulk_lexer::Lexer;
     use hulk_parser::parse;
-    use hulk_ast::{ExprKind, DeclarationKind};
 
     fn expand_source(src: &str) -> (hulk_ast::Program, Vec<MacroError>) {
         let tokens = Lexer::new(src).tokenize().expect("lexer failed");
@@ -61,7 +61,10 @@ mod tests {
         );
         assert!(errs.is_empty(), "unexpected errors: {:?}", errs);
         // No MacroCallExpr or MacroDecl should remain.
-        assert!(prog.declarations.iter().all(|d| !matches!(d.kind, DeclarationKind::Macro(_))));
+        assert!(prog
+            .declarations
+            .iter()
+            .all(|d| !matches!(d.kind, DeclarationKind::Macro(_))));
         // Entry should be a Let (the expanded `let total = 3 in while...`).
         assert!(
             matches!(prog.entry.kind, ExprKind::Let(_)),
@@ -118,7 +121,8 @@ mod tests {
     fn undefined_macro_reports_error() {
         let (_, errs) = expand_source("nonexistent(10) { print(1); }");
         assert!(
-            errs.iter().any(|e| matches!(e.kind, MacroErrorKind::UndefinedMacro(_))),
+            errs.iter()
+                .any(|e| matches!(e.kind, MacroErrorKind::UndefinedMacro(_))),
             "should report undefined macro"
         );
     }
@@ -132,7 +136,8 @@ mod tests {
             "#,
         );
         assert!(
-            errs.iter().any(|e| matches!(e.kind, MacroErrorKind::ArityMismatch { .. })),
+            errs.iter()
+                .any(|e| matches!(e.kind, MacroErrorKind::ArityMismatch { .. })),
             "should report arity mismatch"
         );
     }

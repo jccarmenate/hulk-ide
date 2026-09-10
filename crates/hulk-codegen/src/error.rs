@@ -85,7 +85,7 @@ impl CodegenError {
     pub fn internal(msg: impl Into<String>, span: Option<SourceSpan>) -> Self {
         Self {
             kind: CodegenErrorKind::Internal(msg.into()),
-            span: span,
+            span,
         }
     }
 

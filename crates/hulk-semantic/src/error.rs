@@ -239,8 +239,7 @@ pub enum SemanticErrorKind {
         candidates: Vec<Type>,
     },
     /// The semantic pass should never receive macro nodes after expansion
-    MacroReferenceFound
-    {
+    MacroReferenceFound {
         /// Name of the macro expression in which the error originated
         macro_expr: String,
     },
@@ -446,7 +445,7 @@ impl fmt::Display for SemanticErrorKind {
             }
 
             // Internal
-            Self::Message {error_message} => {
+            Self::Message { error_message } => {
                 write!(f, "{}", error_message)
             }
         }

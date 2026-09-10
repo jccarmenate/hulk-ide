@@ -8,11 +8,11 @@ use std::path::PathBuf;
 use std::process;
 
 use clap::Parser as clapParser;
+use hulk_codegen::{compile, link_output, CodegenOptions};
 use hulk_lexer::{LexError, Lexer};
 use hulk_parser::{ParseErrorKind, Parser};
-use hulk_transpile::expand_program;
 use hulk_semantic::analyze;
-use hulk_codegen::{compile, link_output, CodegenOptions};
+use hulk_transpile::expand_program;
 
 /// The HULK compiler.
 #[derive(clapParser)]
@@ -84,10 +84,7 @@ fn main() {
     let macro_errors = expand_program(&mut program);
     if !macro_errors.is_empty() {
         for err in &macro_errors {
-            eprintln!(
-                "({},{}) MACRO: {}",
-                err.span.line, err.span.col, err.kind
-            );
+            eprintln!("({},{}) MACRO: {}", err.span.line, err.span.col, err.kind);
         }
         process::exit(2); // Macro errors are parse-phase failures.
     }

@@ -585,7 +585,12 @@ pub struct ForExpr<A = ()> {
 }
 
 impl<A> ForExpr<A> {
-    pub fn new(var: impl Into<String>, iterable: Expr<A>, body: Expr<A>, var_span: SourceSpan) -> Self {
+    pub fn new(
+        var: impl Into<String>,
+        iterable: Expr<A>,
+        body: Expr<A>,
+        var_span: SourceSpan,
+    ) -> Self {
         Self {
             var: var.into(),
             iterable: Box::new(iterable),
@@ -646,7 +651,6 @@ impl<A> MemberExpr<A> {
     }
 }
 
-
 /// Object construction (`new Type(args)`) or fixed-size vector allocation
 /// (`new Type[size]` / `new Type[][size]` / `new Type[size]{ i -> expr }`).
 #[derive(Debug, Clone, PartialEq)]
@@ -662,7 +666,12 @@ pub struct NewExpr<A = ()> {
 impl<A> NewExpr<A> {
     /// Plain object construction: `new Type(args)`.
     pub fn new(type_name: TypeRef, args: Vec<Expr<A>>) -> Self {
-        Self { type_name, args, size: None, generator: None }
+        Self {
+            type_name,
+            args,
+            size: None,
+            generator: None,
+        }
     }
 
     /// Vector allocation: `new ElemType[size]` with an optional generator.
@@ -689,7 +698,10 @@ pub struct VectorGenerator<A = ()> {
 
 impl<A> VectorGenerator<A> {
     pub fn new(var: impl Into<String>, body: Expr<A>) -> Self {
-        Self { var: var.into(), body: Box::new(body) }
+        Self {
+            var: var.into(),
+            body: Box::new(body),
+        }
     }
 }
 
@@ -801,7 +813,6 @@ pub enum Pattern {
     Type(TypeRef, Option<String>),
 }
 
-
 // =============================================================================
 // Macro declarations
 // =============================================================================
@@ -834,16 +845,32 @@ pub struct MacroParam {
 
 impl MacroParam {
     pub fn regular(name: impl Into<String>, type_annotation: Option<TypeRef>) -> Self {
-        Self { kind: MacroParamKind::Regular, name: name.into(), type_annotation }
+        Self {
+            kind: MacroParamKind::Regular,
+            name: name.into(),
+            type_annotation,
+        }
     }
     pub fn body_expr(name: impl Into<String>, type_annotation: Option<TypeRef>) -> Self {
-        Self { kind: MacroParamKind::BodyExpr, name: name.into(), type_annotation }
+        Self {
+            kind: MacroParamKind::BodyExpr,
+            name: name.into(),
+            type_annotation,
+        }
     }
     pub fn symbolic(name: impl Into<String>, type_annotation: Option<TypeRef>) -> Self {
-        Self { kind: MacroParamKind::Symbolic, name: name.into(), type_annotation }
+        Self {
+            kind: MacroParamKind::Symbolic,
+            name: name.into(),
+            type_annotation,
+        }
     }
     pub fn placeholder(name: impl Into<String>, type_annotation: Option<TypeRef>) -> Self {
-        Self { kind: MacroParamKind::Placeholder, name: name.into(), type_annotation }
+        Self {
+            kind: MacroParamKind::Placeholder,
+            name: name.into(),
+            type_annotation,
+        }
     }
 }
 
@@ -865,7 +892,12 @@ impl<A> MacroDecl<A> {
         return_type: Option<TypeRef>,
         body: Expr<A>,
     ) -> Self {
-        Self { name: name.into(), params, return_type, body }
+        Self {
+            name: name.into(),
+            params,
+            return_type,
+            body,
+        }
     }
 }
 
@@ -904,7 +936,11 @@ pub struct MacroCallExpr<A = ()> {
 
 impl<A> MacroCallExpr<A> {
     pub fn new(name: impl Into<String>, args: Vec<MacroArg<A>>, body: Option<Expr<A>>) -> Self {
-        Self { name: name.into(), args, body: body.map(Box::new) }
+        Self {
+            name: name.into(),
+            args,
+            body: body.map(Box::new),
+        }
     }
 }
 

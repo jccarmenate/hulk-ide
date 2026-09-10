@@ -1,7 +1,7 @@
 //! IR-level optimization pipeline.
 //!
 //! Invoked after the full module has been lowered and verified, and before
-//! object-file emission. Uses LLVM 17's pass manager via `Module::run_passes`, 
+//! object-file emission. Uses LLVM 17's pass manager via `Module::run_passes`,
 //! which accepts the same pipeline strings as `opt -passes=...` on the command line.
 
 use inkwell::passes::PassBuilderOptions;
@@ -37,8 +37,8 @@ pub fn optimize(ctx: &CodegenCtx, opt: OptLevel) -> Result<(), CodegenError> {
 
     let pass_opts = PassBuilderOptions::create();
 
-    // run_passes requires the TargetMachine so passes that need target-specific 
-    // information can query it. Using the same machine that was used to set the 
+    // run_passes requires the TargetMachine so passes that need target-specific
+    // information can query it. Using the same machine that was used to set the
     // module's data layout guarantees consistency.
     ctx.module
         .run_passes(pipeline, &ctx.target_machine, pass_opts)

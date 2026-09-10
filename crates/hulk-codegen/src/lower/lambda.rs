@@ -22,15 +22,15 @@
 use std::collections::HashSet;
 
 use hulk_ast::{AssignTarget, Expr, ExprKind, LambdaExpr, VectorExpr};
-use hulk_semantic::Type;
 use hulk_rt::ENV_SLOT_BYTES;
+use hulk_semantic::Type;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
 use inkwell::values::{BasicValueEnum, PointerValue};
 
 use super::lower_expr;
 use crate::error::CodegenError;
 use crate::lower::scope::ScopeStack;
-use crate::lower::utils::{llvm_type, is_fat_pointer_type, is_heap_allocated_type};
+use crate::lower::utils::{is_fat_pointer_type, is_heap_allocated_type, llvm_type};
 use crate::lower::LowerCtx;
 
 /// (name, outer alloca ptr, LLVM type, semantic type) for one captured variable.
@@ -90,7 +90,10 @@ pub fn lower_lambda<'ctx>(
     field_offsets.push(-1); // sentinel
 
     let field_map_global = ctx.codegen.module.add_global(
-        ctx.codegen.context.i64_type().array_type(field_offsets.len() as u32),
+        ctx.codegen
+            .context
+            .i64_type()
+            .array_type(field_offsets.len() as u32),
         None,
         &format!("{}_env_map", name),
     );
@@ -155,7 +158,9 @@ pub fn lower_lambda<'ctx>(
                     .functions
                     .get("hulk_rt_retain")
                     .cloned()
-                    .ok_or_else(|| CodegenError::unsupported("hulk_rt_retain not declared".to_string(), None))?;
+                    .ok_or_else(|| {
+                        CodegenError::unsupported("hulk_rt_retain not declared".to_string(), None)
+                    })?;
                 let inner_env_ptr = ctx
                     .codegen
                     .builder
@@ -172,7 +177,9 @@ pub fn lower_lambda<'ctx>(
                     .functions
                     .get("hulk_rt_retain")
                     .cloned()
-                    .ok_or_else(|| CodegenError::unsupported("hulk_rt_retain not declared".to_string(), None))?;
+                    .ok_or_else(|| {
+                        CodegenError::unsupported("hulk_rt_retain not declared".to_string(), None)
+                    })?;
                 ctx.codegen
                     .builder
                     .build_call(retain_fn, &[cap_val.into()], "cap_retain")
@@ -238,8 +245,14 @@ pub fn lower_lambda<'ctx>(
                 .builder
                 .build_store(alloca, cap_val)
                 .map_err(|e| CodegenError::llvm_verification(e.to_string()))?;
-            ctx.scope_stack
-                .declare(cap_name, alloca, *cap_llvm_ty, cap_sem_ty.clone(), false, None);
+            ctx.scope_stack.declare(
+                cap_name,
+                alloca,
+                *cap_llvm_ty,
+                cap_sem_ty.clone(),
+                false,
+                None,
+            );
         }
     }
 
@@ -257,8 +270,14 @@ pub fn lower_lambda<'ctx>(
             .builder
             .build_store(alloca, param_val)
             .map_err(|e| CodegenError::llvm_verification(e.to_string()))?;
-        ctx.scope_stack
-            .declare(&param.name, alloca, param_llvm_ty, param_ty.clone(), false, None);
+        ctx.scope_stack.declare(
+            &param.name,
+            alloca,
+            param_llvm_ty,
+            param_ty.clone(),
+            false,
+            None,
+        );
     }
 
     let body_val = lower_expr(ctx, &lambda.body)?;
@@ -486,7 +505,7 @@ fn walk_free_vars<'ctx>(
             );
         }
         ExprKind::MacroMatch(_mm) => {
-                panic!("internal error: macro match reached code generation unexpanded");
-            }
+            panic!("internal error: macro match reached code generation unexpanded");
+        }
     }
 }
