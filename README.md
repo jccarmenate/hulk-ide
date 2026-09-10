@@ -82,6 +82,15 @@ actually write in, not just compile.
 - **Syntax highlighting** — a TextMate grammar for `.hulk` files.
 - **Run** — compiles and runs the active file via `hulk-cli`, from a command in the editor.
 
+### Screenshots
+
+Live diagnostics from the language server, and a real compile-and-run through `hulk-cli`
+on LLVM 17:
+
+| Live diagnostics | Compile & run |
+| --- | --- |
+| ![Live diagnostic: unknown member](docs/screenshots/diagnostics.png) | ![hulk-cli compiling and running shapes.hulk on LLVM 17](docs/screenshots/compile-and-run.png) |
+
 ### Architecture
 
 `hulk-lsp` links `hulk-lexer`/`hulk-parser`/`hulk-transpile`/`hulk-semantic` directly as
