@@ -30,7 +30,7 @@ use inkwell::values::{BasicValueEnum, PointerValue};
 use super::lower_expr;
 use crate::error::CodegenError;
 use crate::lower::scope::ScopeStack;
-use crate::lower::utils::{llvm_type, is_heap_allocated_type};
+use crate::lower::utils::{llvm_type, is_fat_pointer_type, is_heap_allocated_type};
 use crate::lower::LowerCtx;
 
 /// (name, outer alloca ptr, LLVM type, semantic type) for one captured variable.
@@ -148,7 +148,7 @@ pub fn lower_lambda<'ctx>(
                 .build_load(*cap_llvm_ty, *cap_alloca, &format!("cap_{}", cap_name))
                 .map_err(|e| CodegenError::llvm_verification(e.to_string()))?;
 
-            if matches!(cap_sem_ty, Type::Function { .. }) {
+            if is_fat_pointer_type(cap_sem_ty, ctx.registry) {
                 // Fat pointer: retain only the environment pointer (field 0)
                 let retain_fn = ctx
                     .codegen

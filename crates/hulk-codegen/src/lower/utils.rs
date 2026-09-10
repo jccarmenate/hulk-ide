@@ -176,6 +176,18 @@ pub fn is_heap_allocated_type(ty: &Type, _registry: &TypeRegistry) -> bool {
     )
 }
 
+/// Returns `true` if `ty`'s LLVM representation (see `llvm_type` above) is
+/// the two-word `{ ptr, ptr }` fat pointer, rather than a single `ptr`.
+///
+/// `hulk_rt_retain`/`hulk_rt_release` only accept a single pointer, so any
+/// caller holding a fat-pointer value must extract field 0 (the actual
+/// object/environment pointer) before calling them, instead of passing the
+/// whole struct — passing the struct directly fails LLVM module
+/// verification with a parameter-type mismatch.
+pub fn is_fat_pointer_type(ty: &Type, registry: &TypeRegistry) -> bool {
+    matches!(ty, Type::Function { .. } | Type::Iterable(_)) || matches!(ty, Type::Named(_) if registry.is_protocol(ty))
+}
+
 /// Converts a concrete object pointer to a protocol fat pointer.
 ///
 /// The fat pointer is a struct `{ data: ptr, itable: ptr }`.
